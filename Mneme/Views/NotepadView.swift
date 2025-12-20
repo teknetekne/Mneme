@@ -334,8 +334,8 @@ struct NotepadContent: View {
                     }
                 }
             }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done", systemImage: "checkmark", role: .confirm) {
                         // Dismiss keyboard and hide dismiss button
                         focusedLineId = nil
                         lineStore.focusedId = nil
@@ -343,16 +343,8 @@ struct NotepadContent: View {
                         Task {
                             await viewModel.processLines()
                         }
-                    } label: { 
-                        Image(systemName: "checkmark")
-                            .foregroundStyle(.white)
-                            .frame(width: 32, height: 32)
                     }
-                    .glassEffect(
-                        viewModel.allLinesParsedSuccessfully ? Glass.regular.tint(.orange) : Glass.regular.tint(.gray),
-                        in: Circle()
-                    )
-                    .opacity(viewModel.allLinesParsedSuccessfully ? 1.0 : 0.5)
+                    .tint(.orange)
                     .disabled(!viewModel.allLinesParsedSuccessfully)
                 }
         }
