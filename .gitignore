@@ -133,3 +133,6 @@ Mneme/FatSecretConfig.plist
 
 # Web project dependencies
 mneme-web/node_modules/
+
+# Binary executables
+perform
