@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="22758" systemVersion="23F79" minimumToolsVersion="Automatic" sourceLanguage="Swift" userDefinedModelVersionIdentifier="">
+    <entity name="CalorieLookupCache" representedClassName="CalorieLookupCache" syncable="YES" codeGenerationType="class">
+        <attribute name="calories" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="foodName" optional="NO" attributeType="String"/>
+        <attribute name="id" optional="NO" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="isMenu" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="modifiedAt" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="quantityDescriptor" optional="YES" attributeType="String"/>
+        <attribute name="sourcesJSON" optional="YES" attributeType="String"/>
+        <attribute name="updatedAt" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
+    </entity>
+    <entity name="CurrencySettings" representedClassName="CurrencySettings" syncable="YES" codeGenerationType="class">
+        <attribute name="baseCurrency" optional="NO" attributeType="String"/>
+        <attribute name="exchangeRatesJSON" optional="YES" attributeType="String"/>
+        <attribute name="id" optional="NO" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="lastUpdated" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="modifiedAt" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
+    </entity>
+    <entity name="MealSource" representedClassName="MealSource" syncable="YES" codeGenerationType="class">
+        <attribute name="calories" optional="NO" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="createdAt" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="grams" optional="YES" attributeType="Double" usesScalarValueType="YES"/>
+        <attribute name="id" optional="NO" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="mealName" optional="NO" attributeType="String"/>
+        <attribute name="sourcesJSON" optional="YES" attributeType="String"/>
+        <relationship name="parsedEntry" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="ParsedEntry" inverseName="mealSources" inverseEntity="ParsedEntry"/>
+    </entity>
+    <entity name="ParsedEntry" representedClassName="ParsedEntry" syncable="YES" codeGenerationType="class">
+        <attribute name="amount" optional="YES" attributeType="Double" usesScalarValueType="YES"/>
+        <attribute name="createdAt" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="currency" optional="YES" attributeType="String"/>
+        <attribute name="deviceId" optional="NO" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="distance" optional="YES" attributeType="Double" usesScalarValueType="YES"/>
+        <attribute name="duration" optional="YES" attributeType="Double" usesScalarValueType="YES"/>
+        <attribute name="eventDay" optional="YES" attributeType="String"/>
+        <attribute name="eventTime" optional="YES" attributeType="String"/>
+        <attribute name="id" optional="NO" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="intent" optional="YES" attributeType="String"/>
+        <attribute name="mealKcal" optional="YES" attributeType="Double" usesScalarValueType="YES"/>
+        <attribute name="mealQuantity" optional="YES" attributeType="String"/>
+        <attribute name="modifiedAt" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="object" optional="YES" attributeType="String"/>
+        <attribute name="originalText" optional="NO" attributeType="String"/>
+        <attribute name="reminderDay" optional="YES" attributeType="String"/>
+        <attribute name="reminderTime" optional="YES" attributeType="String"/>
+        <attribute name="source" optional="YES" attributeType="String"/>
+        <relationship name="mealSources" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="MealSource" inverseName="parsedEntry" inverseEntity="MealSource"/>
+        <uniquenessConstraints>
+            <uniquenessConstraint>
+                <constraint value="id"/>
+            </uniquenessConstraint>
+        </uniquenessConstraints>
+    </entity>
+    <entity name="ReminderEventTag" representedClassName="ReminderEventTag" syncable="YES" codeGenerationType="class">
+        <attribute name="colorName" optional="NO" attributeType="String"/>
+        <attribute name="createdAt" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="eventIdentifier" optional="YES" attributeType="String"/>
+        <attribute name="id" optional="NO" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="lineId" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="modifiedAt" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="reminderIdentifier" optional="YES" attributeType="String"/>
+        <attribute name="tag" optional="NO" attributeType="String"/>
+        <uniquenessConstraints>
+            <uniquenessConstraint>
+                <constraint value="id"/>
+            </uniquenessConstraint>
+        </uniquenessConstraints>
+    </entity>
+    <entity name="TagEntity" representedClassName="TagEntity" syncable="YES" codeGenerationType="class">
+        <attribute name="colorName" optional="NO" attributeType="String"/>
+        <attribute name="createdAt" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" optional="NO" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="modifiedAt" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="name" optional="NO" attributeType="String"/>
+        <uniquenessConstraints>
+            <uniquenessConstraint>
+                <constraint value="id"/>
+            </uniquenessConstraint>
+        </uniquenessConstraints>
+    </entity>
+    <entity name="TagAssignment" representedClassName="TagAssignment" syncable="YES" codeGenerationType="class">
+        <attribute name="createdAt" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" optional="NO" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="tagId" optional="NO" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="targetId" optional="NO" attributeType="UUID" usesScalarValueType="NO"/>
+        <uniquenessConstraints>
+            <uniquenessConstraint>
+                <constraint value="id"/>
+            </uniquenessConstraint>
+        </uniquenessConstraints>
+    </entity>
+    <entity name="UserProfile" representedClassName="UserProfileEntity" syncable="YES" codeGenerationType="class">
+        <attribute name="age" optional="YES" attributeType="Integer 32" usesScalarValueType="YES"/>
+        <attribute name="biologicalSex" optional="YES" attributeType="String"/>
+        <attribute name="heightCm" optional="YES" attributeType="Double" usesScalarValueType="YES"/>
+        <attribute name="id" optional="NO" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="lastHealthSync" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="modifiedAt" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="weightKg" optional="YES" attributeType="Double" usesScalarValueType="YES"/>
+        <uniquenessConstraints>
+            <uniquenessConstraint>
+                <constraint value="id"/>
+            </uniquenessConstraint>
+        </uniquenessConstraints>
+    </entity>
+    <entity name="Variable" representedClassName="VariableEntity" syncable="YES" codeGenerationType="class">
+        <attribute name="createdAt" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="currency" optional="YES" attributeType="String"/>
+        <attribute name="id" optional="NO" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="modifiedAt" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="name" optional="NO" attributeType="String"/>
+        <attribute name="type" optional="NO" attributeType="String"/>
+        <attribute name="value" optional="NO" attributeType="String"/>
+        <uniquenessConstraints>
+            <uniquenessConstraint>
+                <constraint value="id"/>
+            </uniquenessConstraint>
+        </uniquenessConstraints>
+    </entity>
+    <entity name="WorkSession" representedClassName="WorkSession" syncable="YES" codeGenerationType="class">
+        <attribute name="createdAt" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="date" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="deviceId" optional="NO" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="durationMinutes" optional="YES" attributeType="Integer 32" usesScalarValueType="YES"/>
+        <attribute name="endTime" optional="YES" attributeType="String"/>
+        <attribute name="id" optional="NO" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="modifiedAt" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="object" optional="YES" attributeType="String"/>
+        <attribute name="startTime" optional="NO" attributeType="String"/>
+        <uniquenessConstraints>
+            <uniquenessConstraint>
+                <constraint value="id"/>
+            </uniquenessConstraint>
+        </uniquenessConstraints>
+    </entity>
+</model>
