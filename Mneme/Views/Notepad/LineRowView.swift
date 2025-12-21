@@ -20,6 +20,9 @@ struct LineRowView: View {
     var isLocationSearchFocused: FocusState<Bool>.Binding
     @ObservedObject var locationSearchService: LocationSearchService
     
+    // UI State
+    var isModalPresented: Bool
+    
     // Mood picker bindings
     @Binding var showMoodPicker: Bool
     @Binding var moodPickerLineId: UUID?
@@ -30,6 +33,8 @@ struct LineRowView: View {
     var onEmptyBackspace: () -> Void
     var onTextChanged: (String, String) -> Void // oldText, newText
     
+    @State private var previousText = ""
+    
     var body: some View {
         VStack(spacing: 0) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -39,9 +44,9 @@ struct LineRowView: View {
                     placeholder: "Write a sentence...",
                     font: editorUIFont,
                     isFirstResponder: Binding(
-                        get: { lineStore.focusedId == line.id && !isLocationSearchActive },
+                        get: { lineStore.focusedId == line.id && !isLocationSearchActive && !isModalPresented },
                         set: { isFirst in
-                            if isFirst && !isLocationSearchActive {
+                            if isFirst && !isLocationSearchActive && !isModalPresented {
                                 focusedLineId.wrappedValue = line.id
                                 lineStore.focus(line.id)
                             }
@@ -64,6 +69,13 @@ struct LineRowView: View {
                     // For now, we rely on the parent managing focus via other means or this binding if it works
                     .onSubmit {
                         onReturn()
+                    }
+                    .onChange(of: line.text) { newText in
+                        onTextChanged(previousText, newText)
+                        previousText = newText
+                    }
+                    .onAppear {
+                        previousText = line.text
                     }
                 #endif
                 
