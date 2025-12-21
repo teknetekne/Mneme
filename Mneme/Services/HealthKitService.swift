@@ -76,6 +76,13 @@ final class HealthKitService: ObservableObject {
                 }
                 
                 let steps = result?.sumQuantity()?.doubleValue(for: HKUnit.count())
+                
+                if let steps = steps {
+                    Task {
+                        await DailyHealthStore.shared.saveMetric(date: startDate, stepCount: steps)
+                    }
+                }
+                
                 continuation.resume(returning: steps)
             }
             
@@ -160,6 +167,13 @@ final class HealthKitService: ObservableObject {
                 }
                 
                 let calories = result?.sumQuantity()?.doubleValue(for: HKUnit.kilocalorie())
+                
+                if let calories = calories {
+                    Task {
+                        await DailyHealthStore.shared.saveMetric(date: startDate, activeEnergy: calories)
+                    }
+                }
+                
                 continuation.resume(returning: calories)
             }
             
@@ -287,6 +301,13 @@ final class HealthKitService: ObservableObject {
                 }
                 
                 let distance = result?.sumQuantity()?.doubleValue(for: HKUnit.meter())
+                
+                if let distance = distance {
+                    Task {
+                        await DailyHealthStore.shared.saveMetric(date: startDate, distance: distance)
+                    }
+                }
+                
                 continuation.resume(returning: distance)
             }
             

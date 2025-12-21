@@ -15,7 +15,7 @@ struct EventEditorView: View {
     @State private var endDate: Date
     @State private var notes: String
     @State private var location: String
-    @State private var showDeleteConfirmation = false
+
     @State private var showLocationSearch = false
     @State private var showAddTagSheet = false
     @State private var editingTag: Tag?
@@ -56,7 +56,7 @@ struct EventEditorView: View {
                 locationSection
                 notesSection
                 tagsSection
-                deleteSection
+
             }
             .navigationTitle("Edit Event")
             #if os(iOS)
@@ -77,14 +77,7 @@ struct EventEditorView: View {
                     }
                 }
             }
-            .alert("Delete Event", isPresented: $showDeleteConfirmation) {
-                Button("Cancel", role: .cancel) { }
-                Button("Delete", role: .destructive) {
-                    deleteEvent()
-                }
-            } message: {
-                Text("Are you sure you want to delete this event?")
-            }
+
             .alert("Error", isPresented: .constant(errorMessage != nil)) {
                 Button("OK") {
                     errorMessage = nil
@@ -206,20 +199,7 @@ struct EventEditorView: View {
         }
     }
     
-    private func deleteEvent() {
-        guard let ekEvent = eventKitService.getEvent(byIdentifier: event.eventIdentifier) else {
-            errorMessage = "Event not found"
-            return
-        }
-        
-        do {
-            try eventKitService.deleteEvent(ekEvent)
-            onDismiss()
-            dismiss()
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-    }
+
     
     // MARK: - Subviews
     
@@ -321,17 +301,5 @@ struct EventEditorView: View {
         }
     }
     
-    private var deleteSection: some View {
-        Section {
-            Button(role: .destructive) {
-                showDeleteConfirmation = true
-            } label: {
-                HStack {
-                    Spacer()
-                    Text("Delete Event")
-                    Spacer()
-                }
-            }
-        }
-    }
+
 }
