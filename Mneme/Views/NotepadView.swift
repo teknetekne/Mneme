@@ -65,6 +65,10 @@ struct NotepadContent: View {
             lineStore.linesById[id]?.isActive == true
         }
     }
+    
+    private var isAnyModalPresented: Bool {
+        showVariableDialog || showActiveWorkMenu || showAddTagSheet || tagBeingEdited != nil
+    }
 
 
     var body: some View {
@@ -116,6 +120,7 @@ struct NotepadContent: View {
                             previousFocusedLineId: $previousFocusedLineId,
                             isLocationSearchFocused: $isLocationSearchFocused,
                             locationSearchService: locationSearchService,
+                            isModalPresented: isAnyModalPresented,
                             showMoodPicker: $showMoodPicker,
                             moodPickerLineId: $moodPickerLineId,
                             onMoodSelected: { emoji in

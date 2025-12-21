@@ -124,8 +124,12 @@ struct LineTextView: UIViewRepresentable {
             
             if replacement == ":" {
                 let newText = (current as NSString).replacingCharacters(in: range, with: replacement)
-                parent.onTextChangedDirectly?(current, newText)
-                return false
+                // Only intercept if it's the start of the line (triggering the picker)
+                if newText == ":" {
+                    parent.onTextChangedDirectly?(current, newText)
+                    return false
+                }
+                return true
             }
             
             return true
