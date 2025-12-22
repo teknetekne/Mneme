@@ -12,7 +12,7 @@ Mneme (pronounced *nee-mee*, named after the Muse of memory) turns your free-for
 
 <p align="center">
   <a href="https://www.mneme.website">
-    <img src="https://www.mneme.website/assets/notepad.png" width="600" alt="Mneme UI">
+    <img src="https://www.mneme.website/assets/notepad.png" width="400" alt="Mneme UI">
   </a>
 </p>
 
@@ -23,12 +23,12 @@ Powered by Apple Foundation Models, everything happens on-device. Your data neve
 ### Smart Variables
 Mneme automatically detects monetary values, dates, and custom variables in your notes.
 
-<img src="https://www.mneme.website/assets/variables.png" width="500" alt="Smart Variables">
+<img src="https://www.mneme.website/assets/variables.png" width="300" alt="Smart Variables">
 
 ### Synchronized Reminders
 Never miss a beat. Reminders are automatically created from your notes and synced across devices.
 
-<img src="https://www.mneme.website/assets/reminder.png" width="500" alt="Reminders">
+<img src="https://www.mneme.website/assets/reminder.png" width="300" alt="Reminders">
 
 ### Unified Calendar & Events
 Seamlessly manage your schedule. Events extracted from your notes appear instantly in your calendar.
