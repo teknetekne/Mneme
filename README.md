@@ -60,7 +60,8 @@ Designed for the modern Apple ecosystem, pushing the limits of what SwiftUI and 
 - **UI**: SwiftUI + Charts
 - **AI/NLP**: FoundationModels (`SystemLanguageModel`), Translation framework, Custom Regex Parsers.
 - **Persistence**: Core Data mirrored to CloudKit (with local fallback).
-- **Integrations**: EventKit, HealthKit.
+- **Integrations**: EventKit, HealthKit (Read-Only).
+- **Data Sources**: USDA API (Calorie Data), FreeCurrencyAPI (Exchange Rates).
 - **Architecture**: MVVM with centralized `ParsingService` and `LineStore`.
 
 ## 🏗 How Parsing Works (The Engine)
@@ -69,7 +70,7 @@ Designed for the modern Apple ecosystem, pushing the limits of what SwiftUI and 
 2. **NLP Pipeline**: The text is passed to `NLPService`, which utilizes on-device Foundation Models to classify intent (Event vs. Expense vs. Journal).
 3. **Extraction**: Specialized handlers (`MealHandler`, `FinanceHandler`, etc.) extract entities like Amount, Date, Calories using a mix of LLM extraction and deterministic regex for 100% accuracy on critical numbers.
 4. **Action**:
-    - **Health**: Writes directly to HealthKit (e.g., `DietaryEnergyConsumed`).
+    - **Health**: Reads activity data (Steps, Active Energy) from HealthKit. Consumed calories are enriched via **USDA API**.
     - **Calendar**: Syncs with EventKit.
     - **Storage**: Saves structured data to Core Data for charts/history.
 
