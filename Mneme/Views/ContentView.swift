@@ -56,7 +56,78 @@ struct ContentView: View {
         }
     }
 
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
     var body: some View {
+        Group {
+            if horizontalSizeClass == .regular {
+                sidebarLayout
+            } else {
+                tabLayout
+            }
+        }
+        .sheet(isPresented: $showPermissionsOnboarding) {
+            PermissionsOnboardingView {
+                hasShownPermissionsOnboarding = true
+                showPermissionsOnboarding = false
+            }
+            .interactiveDismissDisabled()
+        }
+        .sheet(isPresented: $showTutorial) {
+            TutorialView {
+                hasShownTutorial = true
+                showTutorial = false
+                // Trigger permissions after tutorial if not shown yet
+                if !hasShownPermissionsOnboarding {
+                    showPermissionsOnboarding = true
+                }
+            }
+            .interactiveDismissDisabled()
+        }
+        .onAppear {
+            if !hasShownTutorial {
+                showTutorial = true
+            } else if !hasShownPermissionsOnboarding {
+                showPermissionsOnboarding = true
+            }
+        }
+    }
+
+    private var sidebarLayout: some View {
+        NavigationSplitView {
+            List(selection: Binding<Tab?>(
+                get: { selection },
+                set: { if let newValue = $0 { selection = newValue } }
+            )) {
+                ForEach(Tab.allCases) { tab in
+                    NavigationLink(value: tab) {
+                        Label(tab.title, systemImage: tab.systemImage)
+                    }
+                }
+            }
+            .navigationTitle("Mneme")
+            .listStyle(.sidebar)
+        } detail: {
+            NavigationStack {
+                switch selection {
+                case .notepad:
+                    NotepadView()
+                case .reminders:
+                    RemindersView()
+                        .navigationTitle(Tab.reminders.title)
+                case .calendar:
+                    CalendarView()
+                case .summary:
+                    DailySummaryView()
+                        .navigationTitle(Tab.summary.title)
+                }
+            }
+            .tint(selectedTabColor)
+        }
+        .tint(selectedTabColor)
+    }
+
+    private var tabLayout: some View {
         TabView(selection: $selection) {
             NavigationStack {
                 NotepadView()
@@ -87,31 +158,6 @@ struct ContentView: View {
         .tabViewStyle(.automatic)
         .tint(selectedTabColor)
         .background(backgroundColor.ignoresSafeArea())
-        .sheet(isPresented: $showPermissionsOnboarding) {
-            PermissionsOnboardingView {
-                hasShownPermissionsOnboarding = true
-                showPermissionsOnboarding = false
-            }
-            .interactiveDismissDisabled()
-        }
-        .sheet(isPresented: $showTutorial) {
-            TutorialView {
-                hasShownTutorial = true
-                showTutorial = false
-                // Trigger permissions after tutorial if not shown yet
-                if !hasShownPermissionsOnboarding {
-                    showPermissionsOnboarding = true
-                }
-            }
-            .interactiveDismissDisabled()
-        }
-        .onAppear {
-            if !hasShownTutorial {
-                showTutorial = true
-            } else if !hasShownPermissionsOnboarding {
-                showPermissionsOnboarding = true
-            }
-        }
     }
 }
 

@@ -204,6 +204,7 @@ struct RemindersView: View {
             
             ScrollViewReader { proxy in
                 remindersList
+                    .frame(maxWidth: .infinity, alignment: .center)
                     .onChange(of: scrollToId) { _, id in
                         if let id = id {
                             withAnimation {
@@ -529,7 +530,7 @@ private struct SmartListsGrid: View {
     @State private var showTagFilterSheet = false
 
     private var columns: [GridItem] {
-        [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
+        [GridItem(.adaptive(minimum: 150), spacing: 12)]
     }
     
     private func filterForTitle(_ title: String) -> ReminderFilter? {

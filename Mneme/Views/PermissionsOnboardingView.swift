@@ -125,7 +125,7 @@ struct PermissionsOnboardingView: View {
                 Button {
                     action()
                 } label: {
-                    Text("Grant")
+                    Text("Continue")
                         .font(.subheadline)
                         .foregroundStyle(.white)
                         .padding(.horizontal, 16)

@@ -266,6 +266,26 @@ final class NotepadViewModel: ObservableObject {
         lineStore.updateText(for: id, newText: newText)
     }
     
+    func validateExistingLines() {
+        // Snapshot the lines to ensure thread safety and stability
+        let snapshot = lines.compactMap { line -> (UUID, String)? in
+            let text = line.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            return text.isEmpty ? nil : (line.id, line.text)
+        }
+        
+        Task {
+            // Show loading state immediately for better UX
+            for (id, _) in snapshot {
+                lineStore.updateStatus(for: id, status: .loading)
+            }
+            
+            // Re-validate all lines sequentially
+            for (id, text) in snapshot {
+                await parseLine(id: id, text: text)
+            }
+        }
+    }
+    
     // MARK: - Parsing Results
     
     var showParsingResults: Bool {

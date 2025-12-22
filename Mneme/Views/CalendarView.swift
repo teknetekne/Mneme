@@ -87,6 +87,8 @@ struct CalendarView: View {
                     .padding(.horizontal, horizontalInset)
                     .padding(.bottom, 16)
                 }
+                .frame(maxWidth: 600)
+                .frame(maxWidth: .infinity, alignment: .center)
             }
             .onAppear {
                 if !calendar.isDate(selectedDate, equalTo: currentMonth, toGranularity: .month) {

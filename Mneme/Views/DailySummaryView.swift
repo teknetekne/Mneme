@@ -292,6 +292,8 @@ struct DailySummaryView: View {
         .padding(.horizontal, horizontalInset)
         .padding(.top, 10)
         .padding(.bottom, 16)
+        .frame(maxWidth: 600)
+        .frame(maxWidth: .infinity, alignment: .center)
     }
     
     
