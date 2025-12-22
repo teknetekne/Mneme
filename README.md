@@ -1,8 +1,14 @@
 # Mneme
 
-<img src="https://www.mneme.website/assets/mneme-logo.png" width="120" alt="Mneme Logo">
+<p align="center">
+  <img src="https://www.mneme.website/assets/mneme-logo.png" width="120" alt="Mneme Logo">
+</p>
 
-![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg) ![Swift: 6.0](https://img.shields.io/badge/Swift-6.0-orange.svg) ![Platform: iOS 26.1](https://img.shields.io/badge/Platform-iOS%2026.1-lightgrey.svg)
+<p align="center">
+  <img src="https://img.shields.io/badge/License-GPLv3-blue.svg" alt="License: GPL v3">
+  <img src="https://img.shields.io/badge/Swift-6.0-orange.svg" alt="Swift: 6.0">
+  <img src="https://img.shields.io/badge/Platform-iOS%2026.1-lightgrey.svg" alt="Platform: iOS 26.1">
+</p>
 
 💡 **What is Mneme?**
 
@@ -12,37 +18,37 @@ Mneme (pronounced *nee-mee*, named after the Muse of memory) turns your free-for
 
 <p align="center">
   <a href="https://www.mneme.website">
-    <img src="https://www.mneme.website/assets/notepad.png" width="400" alt="Mneme UI">
+    <img src="https://www.mneme.website/assets/notepad.png" width="250" alt="Mneme UI">
   </a>
 </p>
 
 Powered by Apple Foundation Models, everything happens on-device. Your data never touches a third-party server.
 
-## The Magic
+## ⚡️ Usage
 
-### Smart Variables
-Mneme automatically detects monetary values, dates, and custom variables in your notes.
+Start typing naturally. Mneme uses simple formatting to understand your intent.
 
-<img src="https://www.mneme.website/assets/variables.png" width="300" alt="Smart Variables">
+### 📍 Locations (`@`)
+Use the `@` symbol to specify a location for your events or reminders.
+- `Dinner with Ashley @ Hard Rock Cafe`
+- `Meeting @ 10am @ Office`
 
-### Synchronized Reminders
-Never miss a beat. Reminders are automatically created from your notes and synced across devices.
+### 📔 Journal & Mood (`:`)
+Start a line with `:` to create a journal entry or log your mood.
+- `: I feel great today!`
+- `: Had a productive meeting with the team.`
 
-<img src="https://www.mneme.website/assets/reminder.png" width="300" alt="Reminders">
+### 💰 Smart Variables
+Define custom variables for recurring values like your salary or rent.
+- `+salary` → Adds your defined salary amount.
+- `-rent` → Deducts your rent amount.
+- `+coffee` → Adds the cost of a coffee.
 
-### Unified Calendar & Events
-Seamlessly manage your schedule. Events extracted from your notes appear instantly in your calendar.
+### 🍎 Health & Food
+Log your meals naturally. Mneme calculates calories automatically.
+- `Ate 200g pizza`
+- `Drank 1 cup of coffee`
 
-| Event Details | Calendar View |
-|:---:|:---:|
-| <img src="https://www.mneme.website/assets/eventdetails.png" width="300" alt="Event Details"> | <img src="https://www.mneme.website/assets/calendar.png" width="300" alt="Calendar"> |
-
-### Analytics & Insights
-Gain deep insights into your habits and data with detailed graphs and AI-powered analysis.
-
-| Detailed Graphs | AI Analysis |
-|:---:|:---:|
-| <img src="https://www.mneme.website/assets/graphs.png" width="300" alt="Graphs"> | <img src="https://www.mneme.website/assets/analysis.png" width="300" alt="Analysis"> |
 
 ## Key Capabilities
 
