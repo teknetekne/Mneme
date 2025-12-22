@@ -10,7 +10,7 @@
   <img src="https://img.shields.io/badge/Platform-iOS%2026.1-lightgrey.svg" alt="Platform: iOS 26.1">
 </p>
 
-💡 **What is Mneme?**
+## 💡 **What is Mneme?**
 
 Visit our website: [mneme.website](https://www.mneme.website)
 
@@ -31,10 +31,10 @@ Start typing naturally. Mneme uses simple formatting to understand your intent.
 ### 📍 Locations (`@`)
 Use the `@` symbol to specify a location for your events or reminders.
 - `Dinner with Ashley @ Hard Rock Cafe`
-- `Meeting @ 10am @ Office`
+- `Meeting at 10am @ Office`
 
 ### 📔 Journal & Mood (`:`)
-Start a line with `:` to create a journal entry or log your mood.
+Start a line with `:` to create a journal entry by choosing your mood.
 - `: I feel great today!`
 - `: Had a productive meeting with the team.`
 
@@ -42,7 +42,6 @@ Start a line with `:` to create a journal entry or log your mood.
 Define custom variables for recurring values like your salary or rent.
 - `+salary` → Adds your defined salary amount.
 - `-rent` → Deducts your rent amount.
-- `+coffee` → Adds the cost of a coffee.
 
 ### 🍎 Health & Food
 Log your meals naturally. Mneme calculates calories automatically.
