@@ -7,10 +7,12 @@ struct TutorialView: View {
     
     private let pages = [
         TutorialPage(
-            image: "sparkles",
-            title: "Welcome to Mneme",
+            image: "mneme-logo",
+            title: "Welcome to Mneme\n(nee mee)",
             description: "Your intelligent daily companion. Mneme turns your thoughts into organized data using advanced on-device AI.",
-            color: .blue
+            color: .blue,
+            isSystemImage: false,
+            showBackground: false
         ),
         TutorialPage(
             image: "mic.fill",
@@ -87,6 +89,8 @@ struct TutorialPage {
     let title: String
     let description: String
     let color: Color
+    var isSystemImage: Bool = true
+    var showBackground: Bool = true
 }
 
 struct TutorialPageView: View {
@@ -96,14 +100,24 @@ struct TutorialPageView: View {
         VStack(spacing: 30) {
             Spacer()
             
-            Circle()
-                .fill(page.color.opacity(0.1))
-                .frame(width: 200, height: 200)
-                .overlay {
+            ZStack {
+                if page.showBackground {
+                    Circle()
+                        .fill(page.color.opacity(0.1))
+                }
+                
+                if page.isSystemImage {
                     Image(systemName: page.image)
                         .font(.system(size: 80))
                         .foregroundStyle(page.color)
+                } else {
+                    Image(page.image)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 150, height: 150)
                 }
+            }
+            .frame(width: 200, height: 200)
             
             VStack(spacing: 16) {
                 Text(page.title)
