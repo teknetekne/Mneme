@@ -154,6 +154,8 @@ struct SettingsView: View {
                 
 
             }
+            .frame(maxWidth: 600)
+            .frame(maxWidth: .infinity, alignment: .center)
             .navigationTitle("Settings")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)

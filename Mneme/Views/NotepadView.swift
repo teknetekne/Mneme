@@ -75,6 +75,7 @@ struct NotepadContent: View {
         mainContent
             .onAppear {
                 viewModel.warmupServices()
+                viewModel.validateExistingLines()
                 DispatchQueue.main.async {
                     focusFirstLine()
                 }
@@ -274,7 +275,7 @@ struct NotepadContent: View {
                     .font(.system(size: 20, weight: .medium))
                     .foregroundStyle(.white)
                     .frame(width: 44, height: 44)
-                    .background(Color.accentColor)
+                    .background(Color.orange)
                     .clipShape(Circle())
                     .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 2)
             }
@@ -340,14 +341,18 @@ struct NotepadContent: View {
                 }
             }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done", systemImage: "checkmark", role: .confirm) {
-                        // Dismiss keyboard and hide dismiss button
-                        focusedLineId = nil
-                        lineStore.focusedId = nil
-                        
-                        Task {
-                            await viewModel.processLines()
+                    Group {
+                        #if os(iOS)
+                        Button("Done", systemImage: "checkmark", role: .confirm) {
+                            finishEditing()
                         }
+                        #else
+                        Button {
+                            finishEditing()
+                        } label: {
+                            Label("Done", systemImage: "checkmark")
+                        }
+                        #endif
                     }
                     .tint(.orange)
                     .disabled(!viewModel.allLinesParsedSuccessfully)
@@ -597,6 +602,7 @@ struct NotepadContent: View {
                         }
                         locationSearchService.searchQuery = ""
                         // Focus on search field after animation
+        // Focus on search field after animation
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
                             isLocationSearchFocused = true
                         }
@@ -605,6 +611,16 @@ struct NotepadContent: View {
             }
         }
         .padding(.vertical, 4)
+    }
+    
+    private func finishEditing() {
+        // Dismiss keyboard and hide dismiss button
+        focusedLineId = nil
+        lineStore.focusedId = nil
+        
+        Task {
+            await viewModel.processLines()
+        }
     }
     
     // MARK: - Helper Views
