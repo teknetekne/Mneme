@@ -12,6 +12,28 @@ fileprivate enum ReminderFilter {
     case completed
 }
 
+fileprivate enum ReminderSortOption {
+    case date
+    case priority
+    case title
+    
+    var displayName: String {
+        switch self {
+        case .date: return "Date"
+        case .priority: return "Priority"
+        case .title: return "Title"
+        }
+    }
+    
+    var systemImage: String {
+        switch self {
+        case .date: return "calendar"
+        case .priority: return "flag"
+        case .title: return "textformat"
+        }
+    }
+}
+
 struct RemindersView: View {
     @State private var showSearch = false
     @Environment(\.colorScheme) private var colorScheme
@@ -26,6 +48,8 @@ struct RemindersView: View {
     @State private var isLoading = false
     @State private var selectedFilter: ReminderFilter? = .all
     @State private var selectedTagFilter: UUID? = nil
+    @State private var sortOption: ReminderSortOption = .date
+    @State private var sortAscending: Bool = true
     @State private var editingReminder: ReminderItem? = nil
     @State private var showEditSheet = false
     @State private var selectedReminder: ReminderItem?
@@ -53,12 +77,7 @@ struct RemindersView: View {
                     reminder.dueDate != nil && !reminder.isCompleted
                 }
             case .all:
-                filtered = reminders.sorted { reminder1, reminder2 in
-                    if reminder1.isCompleted != reminder2.isCompleted {
-                        return !reminder1.isCompleted
-                    }
-                    return false
-                }
+                filtered = reminders
             case .completed:
                 filtered = reminders.filter { $0.isCompleted }
             }
@@ -78,6 +97,48 @@ struct RemindersView: View {
                 let tags = tagStore.getTags(for: tagTargetId)
                 return tags.contains { $0.id == tagId }
             }
+        }
+        
+        
+        // Apply sorting
+        filtered.sort { r1, r2 in
+            // Always keep completed items at the bottom if we are showing them
+            if r1.isCompleted != r2.isCompleted {
+                return !r1.isCompleted
+            }
+            
+            var result: Bool
+            switch sortOption {
+            case .date:
+                // Sort by due date
+                // Items with due date come before items without due date
+                if let d1 = r1.dueDate, let d2 = r2.dueDate {
+                    result = d1 < d2
+                } else if r1.dueDate != nil {
+                    result = true
+                } else if r2.dueDate != nil {
+                    result = false
+                } else {
+                    // If no due date, sort by creation/title as fallback
+                    result = r1.title < r2.title
+                }
+                
+            case .priority:
+                // Sort by priority (High -> Low by default)
+                if r1.priority != r2.priority {
+                    result = r1.priority < r2.priority
+                } else if let d1 = r1.dueDate, let d2 = r2.dueDate {
+                     // Secondary sort by date
+                    result = d1 < d2
+                } else {
+                    result = r1.title < r2.title
+                }
+                
+            case .title:
+                result = r1.title.localizedCaseInsensitiveCompare(r2.title) == .orderedAscending
+            }
+            
+            return sortAscending ? result : !result
         }
         
         return filtered
@@ -235,6 +296,8 @@ struct RemindersView: View {
                     smartLists: smartLists,
                     selectedFilter: selectedFilter,
                     selectedTagFilter: $selectedTagFilter,
+                    sortOption: $sortOption,
+                    sortAscending: $sortAscending,
                     tagStore: tagStore,
                     onFilterSelected: { filterTitle in
                         handleFilterSelection(filterTitle)
@@ -457,6 +520,8 @@ private struct SmartListsGrid: View {
     let smartLists: [SmartList]
     let selectedFilter: ReminderFilter?
     @Binding var selectedTagFilter: UUID?
+    @Binding var sortOption: ReminderSortOption
+    @Binding var sortAscending: Bool
     let tagStore: TagStore
     let onFilterSelected: (String) -> Void
     let onDoubleTap: (String) -> Void
@@ -499,7 +564,11 @@ private struct SmartListsGrid: View {
                 }
             }
             
-            tagFilterDropdown
+            HStack(spacing: 12) {
+                tagFilterDropdown
+                
+                sortMenu
+            }
         }
         .padding(.vertical, 4)
     }
@@ -519,7 +588,7 @@ private struct SmartListsGrid: View {
                     Image(systemName: "tag")
                         .foregroundStyle(.secondary)
                         .font(.system(size: 14))
-                    Text("Filter by Tag")
+                    Text("Filter")
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -599,6 +668,62 @@ private struct SmartListsGrid: View {
             }
         }
         .presentationDetents([.medium, .large])
+    }
+    
+    private var sortMenu: some View {
+        Menu {
+            Picker("Sort By", selection: $sortOption) {
+                ForEach([ReminderSortOption.date, .priority, .title], id: \.self) { option in
+                    Label(option.displayName, systemImage: option.systemImage)
+                        .tag(option)
+                }
+            }
+            
+            Section {
+                Button {
+                    sortAscending = true
+                } label: {
+                    Label("Ascending", systemImage: "arrow.up")
+                }
+                
+                Button {
+                    sortAscending = false
+                } label: {
+                    Label("Descending", systemImage: "arrow.down")
+                }
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "arrow.up.arrow.down")
+                    .font(.system(size: 14))
+                    .foregroundStyle(.secondary)
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(sortOption.displayName)
+                        .foregroundStyle(.primary)
+                }
+                    
+                Spacer()
+                
+                HStack(spacing: 4) {
+                    Image(systemName: sortAscending ? "arrow.up" : "arrow.down")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            .font(.body)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Color(white: colorScheme == .dark ? 1 : 0, opacity: colorScheme == .dark ? 0.1 : 0.05))
+            )
+        }
+        .frame(maxWidth: .infinity) // Make sort button full width like filter button
     }
 }
 
@@ -777,6 +902,14 @@ private struct CreateReminderView: View {
     @State private var title: String = ""
     @State private var dueDate: Date?
     @State private var hasDueDate: Bool = false
+    @State private var notes: String = ""
+    @State private var location: String = ""
+    @State private var showLocationSearch = false
+    @State private var urlString: String = ""
+    @State private var priority: Int = 0 
+    @State private var selectedCalendar: EKCalendar?
+    @State private var availableCalendars: [EKCalendar] = []
+    
     @State private var errorMessage: String? = nil
     @Environment(\.dismiss) private var dismiss
     
@@ -797,6 +930,70 @@ private struct CreateReminderView: View {
                         ), displayedComponents: [.date, .hourAndMinute])
                     }
                 }
+                
+                Section {
+                    Picker("Priority", selection: $priority) {
+                        Text("None").tag(0)
+                        Text("Low").tag(9)
+                        Text("Medium").tag(5)
+                        Text("High").tag(1)
+                    }
+                }
+                
+                if !availableCalendars.isEmpty {
+                    Section {
+                        Picker("List", selection: $selectedCalendar) {
+                            ForEach(availableCalendars, id: \.calendarIdentifier) { calendar in
+                                HStack {
+                                    Circle()
+                                        .fill(Color(cgColor: calendar.cgColor))
+                                        .frame(width: 8, height: 8)
+                                    Text(calendar.title)
+                                }
+                                .tag(calendar as EKCalendar?)
+                            }
+                        }
+                    }
+                }
+                
+                Section {
+                    if location.isEmpty {
+                        Button {
+                            showLocationSearch = true
+                        } label: {
+                            HStack {
+                                Image(systemName: "mappin.and.ellipse")
+                                Text("Add Location")
+                            }
+                        }
+                    } else {
+                        HStack {
+                            Image(systemName: "mappin.circle.fill")
+                                .foregroundColor(.red)
+                            Text(location)
+                            Spacer()
+                            Button {
+                                location = ""
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    
+                    TextField("URL", text: $urlString)
+                        .keyboardType(.URL)
+                        .autocorrectionDisabled()
+                        #if os(iOS)
+                        .textInputAutocapitalization(.never)
+                        #endif
+                }
+                
+                Section {
+                    TextField("Notes", text: $notes, axis: .vertical)
+                        .lineLimit(3...6)
+                }
             }
             .navigationTitle("New Reminder")
             #if os(iOS)
@@ -815,6 +1012,15 @@ private struct CreateReminderView: View {
                     .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
+            .onAppear {
+                loadCalendars()
+            }
+            .sheet(isPresented: $showLocationSearch) {
+                LocationSearchView { locationName, _ in
+                    location = locationName
+                    showLocationSearch = false
+                }
+            }
             .alert("Error", isPresented: .constant(errorMessage != nil)) {
                 Button("OK") {
                     errorMessage = nil
@@ -827,12 +1033,26 @@ private struct CreateReminderView: View {
         }
     }
     
+    private func loadCalendars() {
+        availableCalendars = eventKitService.getCalendars(for: .reminder)
+        if selectedCalendar == nil, let defaultCalendar = availableCalendars.first(where: { $0.isImmutable == false }) {
+            selectedCalendar = defaultCalendar
+        }
+    }
+    
     private func createReminder() {
         Task {
             do {
+                let url = urlString.isEmpty ? nil : URL(string: urlString)
+                
                 _ = try await eventKitService.createReminder(
                     title: title.trimmingCharacters(in: .whitespacesAndNewlines),
-                    dueDate: hasDueDate ? dueDate : nil
+                    dueDate: hasDueDate ? dueDate : nil,
+                    notes: notes.isEmpty ? nil : notes,
+                    locationName: location.isEmpty ? nil : location,
+                    url: url,
+                    priority: priority,
+                    calendar: selectedCalendar
                 )
                 onDismiss()
                 dismiss()
@@ -850,6 +1070,9 @@ private struct ReminderEditView: View {
     @State private var dueDate: Date?
     @State private var hasDueDate: Bool
     @State private var location: String
+    @State private var urlString: String
+    @State private var notes: String
+    @State private var priority: ReminderPriority
     @State private var showDeleteConfirmation = false
     @State private var showLocationSearch = false
     @State private var showAddTagSheet = false
@@ -888,6 +1111,9 @@ private struct ReminderEditView: View {
         self._hasDueDate = State(initialValue: reminder.dueDate != nil)
         let locationName = reminder.ekReminder?.alarms?.compactMap { $0.structuredLocation?.title }.first ?? ""
         self._location = State(initialValue: locationName)
+        self._urlString = State(initialValue: reminder.ekReminder?.url?.absoluteString ?? "")
+        self._notes = State(initialValue: reminder.ekReminder?.notes ?? "")
+        self._priority = State(initialValue: reminder.priority)
         self.originalReminder = reminder
         self.eventKitService = eventKitService
         self.onSave = onSave
@@ -910,6 +1136,27 @@ private struct ReminderEditView: View {
                             get: { dueDate ?? Date() },
                             set: { dueDate = $0 }
                         ), displayedComponents: [.date, .hourAndMinute])
+                    }
+                }
+                
+                Section {
+                    TextField("URL", text: $urlString)
+                        .keyboardType(.URL)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+                }
+                
+                Section {
+                    TextField("Notes", text: $notes, axis: .vertical)
+                        .lineLimit(3...6)
+                }
+                
+                Section {
+                    Picker("Priority", selection: $priority) {
+                        Text("None").tag(ReminderPriority.none)
+                        Text("Low").tag(ReminderPriority.low)
+                        Text("Medium").tag(ReminderPriority.medium)
+                        Text("High").tag(ReminderPriority.high)
                     }
                 }
                 
@@ -1052,7 +1299,18 @@ private struct ReminderEditView: View {
             return
         }
         
+        
         ekReminder.title = title
+        ekReminder.notes = notes.isEmpty ? nil : notes
+        ekReminder.url = urlString.isEmpty ? nil : URL(string: urlString)
+        
+        // Update priority
+        switch priority {
+        case .none: ekReminder.priority = 0
+        case .high: ekReminder.priority = 1
+        case .medium: ekReminder.priority = 5
+        case .low: ekReminder.priority = 9
+        }
         
         // Update due date
         if hasDueDate, let dueDate = dueDate {
@@ -1085,7 +1343,7 @@ private struct ReminderEditView: View {
                 ekReminder: ekReminder,
                 title: title,
                 isCompleted: originalReminder.isCompleted,
-                priority: originalReminder.priority,
+                priority: priority,
                 dueDate: hasDueDate ? dueDate : nil
             )
             onSave(updatedReminder)

@@ -194,9 +194,9 @@ struct VariableDialogView: View {
                                             #endif
                                         
                                         Menu {
-                                            ForEach(["TRY", "USD", "EUR", "GBP", "JPY"], id: \.self) { currency in
-                                                Button(currency) {
-                                                    selectedCurrency = currency
+                                            ForEach(Currency.all) { currency in
+                                                Button("\(currency.code) (\(currency.symbol))") {
+                                                    selectedCurrency = currency.code
                                                 }
                                             }
                                             Button("None") {

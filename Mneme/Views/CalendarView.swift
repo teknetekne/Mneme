@@ -294,7 +294,8 @@ struct CalendarView: View {
                 title: ekEvent.title,
                 time: timeString,
                 startDate: ekEvent.startDate,
-                eventIdentifier: ekEvent.eventIdentifier
+                eventIdentifier: ekEvent.eventIdentifier,
+                url: ekEvent.url
             )
             
             if eventsDict[dayStart] == nil {
@@ -410,7 +411,7 @@ private struct SearchView: View {
         
         let events = ekEvents.map { ekEvent in
             let timeString = formatter.string(from: ekEvent.startDate)
-        return CalendarEvent(title: ekEvent.title, time: timeString, startDate: ekEvent.startDate, eventIdentifier: ekEvent.eventIdentifier)
+        return CalendarEvent(title: ekEvent.title, time: timeString, startDate: ekEvent.startDate, eventIdentifier: ekEvent.eventIdentifier, url: ekEvent.url)
         }
         
         await MainActor.run {
@@ -721,6 +722,12 @@ private struct CreateEventView: View {
     @State private var startDate: Date = Date()
     @State private var endDate: Date = Date().addingTimeInterval(3600)
     @State private var notes: String = ""
+    @State private var location: String = ""
+    @State private var showLocationSearch = false
+    @State private var urlString: String = ""
+    @State private var selectedCalendar: EKCalendar?
+    @State private var availableCalendars: [EKCalendar] = []
+    
     @State private var errorMessage: String? = nil
     @Environment(\.dismiss) private var dismiss
     
@@ -734,6 +741,56 @@ private struct CreateEventView: View {
                 Section {
                     DatePicker("Start", selection: $startDate)
                     DatePicker("End", selection: $endDate)
+                }
+                
+                Section {
+                    if location.isEmpty {
+                        Button {
+                            showLocationSearch = true
+                        } label: {
+                            HStack {
+                                Image(systemName: "mappin.and.ellipse")
+                                Text("Add Location")
+                            }
+                        }
+                    } else {
+                        HStack {
+                            Image(systemName: "mappin.circle.fill")
+                                .foregroundColor(.red)
+                            Text(location)
+                            Spacer()
+                            Button {
+                                location = ""
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    
+                    TextField("URL", text: $urlString)
+                        .keyboardType(.URL)
+                        .autocorrectionDisabled()
+                        #if os(iOS)
+                        .textInputAutocapitalization(.never)
+                        #endif
+                }
+                
+                if !availableCalendars.isEmpty {
+                    Section {
+                        Picker("Calendar", selection: $selectedCalendar) {
+                            ForEach(availableCalendars, id: \.calendarIdentifier) { calendar in
+                                HStack {
+                                    Circle()
+                                        .fill(Color(cgColor: calendar.cgColor))
+                                        .frame(width: 8, height: 8)
+                                    Text(calendar.title)
+                                }
+                                .tag(calendar as EKCalendar?)
+                            }
+                        }
+                    }
                 }
                 
                 Section {
@@ -758,6 +815,15 @@ private struct CreateEventView: View {
                     .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
+            .onAppear {
+                loadCalendars()
+            }
+            .sheet(isPresented: $showLocationSearch) {
+                LocationSearchView { locationName, _ in
+                    location = locationName
+                    showLocationSearch = false
+                }
+            }
             .alert("Error", isPresented: .constant(errorMessage != nil)) {
                 Button("OK") {
                     errorMessage = nil
@@ -770,14 +836,26 @@ private struct CreateEventView: View {
         }
     }
     
+    private func loadCalendars() {
+        availableCalendars = eventKitService.getCalendars(for: .event)
+        if selectedCalendar == nil, let defaultCalendar = availableCalendars.first(where: { $0.isImmutable == false }) {
+            selectedCalendar = defaultCalendar
+        }
+    }
+    
     private func createEvent() {
         Task {
             do {
+                let url = urlString.isEmpty ? nil : URL(string: urlString)
+                
                 _ = try await eventKitService.createEvent(
                     title: title.trimmingCharacters(in: .whitespacesAndNewlines),
                     startDate: startDate,
                     endDate: endDate,
-                    notes: notes.isEmpty ? nil : notes
+                    notes: notes.isEmpty ? nil : notes,
+                    location: location.isEmpty ? nil : location,
+                    url: url,
+                    calendar: selectedCalendar
                 )
                 onDismiss()
                 dismiss()
@@ -797,6 +875,7 @@ struct CalendarEvent: Identifiable, Equatable {
     let time: String?
     let startDate: Date
     let eventIdentifier: String
+    let url: URL?
 }
 
 @MainActor

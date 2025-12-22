@@ -15,6 +15,7 @@ struct EventEditorView: View {
     @State private var endDate: Date
     @State private var notes: String
     @State private var location: String
+    @State private var urlString: String
 
     @State private var showLocationSearch = false
     @State private var showAddTagSheet = false
@@ -46,6 +47,7 @@ struct EventEditorView: View {
         _endDate = State(initialValue: Date())
         _notes = State(initialValue: "")
         _location = State(initialValue: "")
+        _urlString = State(initialValue: event.url?.absoluteString ?? "")
     }
     
     var body: some View {
@@ -54,6 +56,7 @@ struct EventEditorView: View {
                 titleSection
                 dateSection
                 locationSection
+                urlSection
                 notesSection
                 tagsSection
 
@@ -178,7 +181,7 @@ struct EventEditorView: View {
                 endDate: endDate,
                 notes: notes.isEmpty ? nil : notes,
                 location: location.isEmpty ? nil : location,
-                url: ekEvent.url
+                url: urlString.isEmpty ? nil : URL(string: urlString)
             )
             onDismiss()
             dismiss()
@@ -196,6 +199,7 @@ struct EventEditorView: View {
             endDate = ekEvent.endDate
             notes = ekEvent.notes ?? ""
             location = ekEvent.location ?? ""
+            urlString = ekEvent.url?.absoluteString ?? ""
         }
     }
     
@@ -242,6 +246,15 @@ struct EventEditorView: View {
                     .buttonStyle(.plain)
                 }
             }
+        }
+    }
+    
+    private var urlSection: some View {
+        Section {
+            TextField("URL", text: $urlString)
+                .keyboardType(.URL)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
         }
     }
     
