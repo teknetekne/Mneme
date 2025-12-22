@@ -11,6 +11,13 @@ struct PermissionsOnboardingView: View {
     @State private var isRequestingHealthKit = false
     @State private var isRequestingEventKit = false
     
+    // New state for tracking stages
+    enum PermissionStage {
+        case health
+        case calendar
+    }
+    @State private var currentStage: PermissionStage = .health
+    
     let onComplete: () -> Void
     
     var body: some View {
@@ -18,46 +25,58 @@ struct PermissionsOnboardingView: View {
             Spacer()
             
             VStack(spacing: 24) {
-                Image(systemName: "lock.shield.fill")
+                // Dynamic Icon based on stage
+                Image(systemName: currentStage == .health ? "heart.fill" : "calendar")
                     .font(.system(size: 64))
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(currentStage == .health ? .red : .blue)
+                    .padding(.bottom, 8)
+                    .transition(.scale.combined(with: .opacity))
+                    .id(currentStage) // Force transition
                 
-                Text("Permissions Setup")
+                Text(currentStage == .health ? "Health Access" : "Calendar Access")
                     .font(.title.bold())
+                    .transition(.opacity)
+                    .id("title-\(currentStage)")
                 
-                Text("To provide the best experience, we need access to your health and calendar data.")
+                Text(currentStage == .health
+                     ? "Mneme needs access to your health data to track your daily stats like steps, calories, and focus time."
+                     : "Mneme needs access to your calendar and reminders to help you organize your schedule effectively.")
                     .font(.body)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 32)
+                    .transition(.opacity)
+                    .id("desc-\(currentStage)")
                 
+                // Content View for Validating Permissions
                 VStack(spacing: 16) {
-                    permissionRow(
-                        icon: "heart.fill",
-                        iconColor: .red,
-                        title: "Health Data",
-                        description: "Access your steps, calories, height, weight, and age",
-                        isAuthorized: healthKitAuthorized,
-                        isLoading: isRequestingHealthKit,
-                        action: requestHealthKitPermission
-                    )
-                    
-                    permissionRow(
-                        icon: "calendar",
-                        iconColor: .blue,
-                        title: "Calendar & Reminders",
-                        description: "Access your events and reminders",
-                        isAuthorized: eventKitAuthorized,
-                        isLoading: isRequestingEventKit,
-                        action: requestEventKitPermission
-                    )
+                    if currentStage == .health {
+                        permissionStatusRow(
+                            icon: "heart.fill",
+                            iconColor: .red,
+                            title: "Health Data",
+                            description: "Steps, calories, biology",
+                            isAuthorized: healthKitAuthorized,
+                            isLoading: isRequestingHealthKit
+                        )
+                    } else {
+                        permissionStatusRow(
+                            icon: "calendar",
+                            iconColor: .blue,
+                            title: "Calendar & Reminders",
+                            description: "Events, tasks, scheduling",
+                            isAuthorized: eventKitAuthorized,
+                            isLoading: isRequestingEventKit
+                        )
+                    }
                 }
                 .padding(.horizontal, 32)
+                .padding(.vertical, 16)
                 
                 Button {
-                    onComplete()
+                    handleContinue()
                 } label: {
-                    Text("Continue")
+                    Text(getButtonTitle())
                         .font(.headline)
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
@@ -67,7 +86,15 @@ struct PermissionsOnboardingView: View {
                 }
                 .padding(.horizontal, 32)
                 .padding(.top, 8)
+                
+                Button("Skip for now") {
+                   handleSkip()
+                }
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .padding(.top, 8)
             }
+            .animation(.easeInOut, value: currentStage)
             
             Spacer()
         }
@@ -75,26 +102,75 @@ struct PermissionsOnboardingView: View {
             checkPermissions()
         }
         .onChange(of: healthKitService.authorizationStatus) { _, newStatus in
-            // Check authorization status after it changes
             Task { @MainActor in
                 healthKitAuthorized = healthKitService.isAuthorized
+                // Auto-advance if authorized
+                if healthKitAuthorized && currentStage == .health {
+                    try? await Task.sleep(nanoseconds: 500_000_000)
+                    withAnimation {
+                        currentStage = .calendar
+                    }
+                }
             }
         }
         .onChange(of: eventKitService.authorizationStatus) { _, newStatus in
             Task { @MainActor in
                 eventKitAuthorized = eventKitService.isAuthorized
+                // Auto-complete if authorized
+                if eventKitAuthorized && currentStage == .calendar {
+                    try? await Task.sleep(nanoseconds: 500_000_000)
+                    onComplete()
+                }
             }
         }
     }
     
-    private func permissionRow(
+    private func getButtonTitle() -> String {
+        switch currentStage {
+        case .health:
+            return healthKitAuthorized ? "Continue" : "Enable Health Access"
+        case .calendar:
+            return eventKitAuthorized ? "Get Started" : "Enable Calendar Access"
+        }
+    }
+    
+    private func handleContinue() {
+        switch currentStage {
+        case .health:
+            if healthKitAuthorized {
+                withAnimation {
+                    currentStage = .calendar
+                }
+            } else {
+                requestHealthKitPermission()
+            }
+        case .calendar:
+            if eventKitAuthorized {
+                onComplete()
+            } else {
+                requestEventKitPermission()
+            }
+        }
+    }
+    
+    private func handleSkip() {
+        switch currentStage {
+        case .health:
+            withAnimation {
+                currentStage = .calendar
+            }
+        case .calendar:
+            onComplete()
+        }
+    }
+    
+    private func permissionStatusRow(
         icon: String,
         iconColor: Color,
         title: String,
         description: String,
         isAuthorized: Bool,
-        isLoading: Bool,
-        action: @escaping () -> Void
+        isLoading: Bool
     ) -> some View {
         HStack(spacing: 16) {
             Image(systemName: icon)
@@ -121,18 +197,7 @@ struct PermissionsOnboardingView: View {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundStyle(.green)
                     .font(.title3)
-            } else {
-                Button {
-                    action()
-                } label: {
-                    Text("Continue")
-                        .font(.subheadline)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
-                        .background(Color.accentColor)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                }
+                    .transition(.scale)
             }
         }
         .padding()
@@ -143,6 +208,11 @@ struct PermissionsOnboardingView: View {
     private func checkPermissions() {
         healthKitAuthorized = healthKitService.isAuthorized
         eventKitAuthorized = eventKitService.isAuthorized
+        
+        // If HealthKit is already authorized, start at calendar stage
+        if healthKitAuthorized {
+             currentStage = .calendar
+        }
     }
     
     private func requestHealthKitPermission() {
@@ -150,16 +220,13 @@ struct PermissionsOnboardingView: View {
         Task {
             _ = await healthKitService.requestAuthorization()
             await MainActor.run {
-                // Force check authorization status after request
                 healthKitAuthorized = healthKitService.isAuthorized
                 isRequestingHealthKit = false
                 
-                // Also check after a short delay to ensure status is updated
-                Task {
-                    try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
-                    await MainActor.run {
-                        healthKitAuthorized = healthKitService.isAuthorized
-                    }
+                if healthKitAuthorized {
+                     withAnimation {
+                         currentStage = .calendar
+                     }
                 }
             }
         }
@@ -172,8 +239,11 @@ struct PermissionsOnboardingView: View {
             await MainActor.run {
                 eventKitAuthorized = eventKitService.isAuthorized
                 isRequestingEventKit = false
+                
+                if eventKitAuthorized {
+                     onComplete()
+                }
             }
         }
     }
-    
 }
