@@ -105,16 +105,9 @@ struct SettingsView: View {
                         get: { currencySettingsStore.baseCurrency },
                         set: { currencySettingsStore.setBaseCurrency($0) }
                     )) {
-                        Text("USD").tag("USD")
-                        Text("EUR").tag("EUR")
-                        Text("TRY").tag("TRY")
-                        Text("GBP").tag("GBP")
-                        Text("JPY").tag("JPY")
-                        Text("CNY").tag("CNY")
-                        Text("AUD").tag("AUD")
-                        Text("CAD").tag("CAD")
-                        Text("CHF").tag("CHF")
-                        Text("INR").tag("INR")
+                        ForEach(Currency.all) { currency in
+                            Text("\(currency.code) - \(currency.symbol)").tag(currency.code)
+                        }
                     }
                 }
                 
@@ -144,6 +137,18 @@ struct SettingsView: View {
                         ForEach(AppTheme.allCases, id: \.self) { theme in
                             Text(theme.displayName).tag(theme)
                         }
+                    }
+                }
+                
+                Section("About") {
+                    Link(destination: URL(string: "https://www.mneme.website/privacy")!) {
+                        Label("Privacy Policy", systemImage: "hand.raised")
+                    }
+                    Link(destination: URL(string: "https://www.mneme.website/support")!) {
+                        Label("Support", systemImage: "questionmark.circle")
+                    }
+                    Link(destination: URL(string: "https://github.com/teknetekne/Mneme")!) {
+                        Label("Open Source (Contribution)", systemImage: "chevron.left.forwardslash.chevron.right")
                     }
                 }
                 

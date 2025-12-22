@@ -74,6 +74,13 @@
             ReferencedContainer = "container:Mneme.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
+      <EnvironmentVariables>
+         <EnvironmentVariable
+            key = "CURRENCY_API_KEY"
+            value = "fca_live_4QmX4QlX68tMLJCzunLwx5KvVs7StXqqTH0sAR8L"
+            isEnabled = "YES">
+         </EnvironmentVariable>
+      </EnvironmentVariables>
    </LaunchAction>
    <ProfileAction
       buildConfiguration = "Release"

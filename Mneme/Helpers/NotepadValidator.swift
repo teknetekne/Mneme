@@ -43,14 +43,10 @@ struct NotepadValidator {
     
     static func isValidCurrency(_ currency: String) -> Bool {
         // Check ISO 4217 currency codes
-        // Supported codes: USD, EUR, TRY, GBP, JPY, CNY, CAD, AUD
+        // Supported codes: defined in Currency.swift
         // Case insensitive
-        let validCurrencies = [
-            "USD", "EUR", "TRY", "GBP", "JPY", "CNY", "CAD", "AUD"
-        ]
-        
         let upperCurrency = currency.uppercased()
-        return validCurrencies.contains(upperCurrency)
+        return Currency.supportedCodes.contains(upperCurrency)
     }
     
     static func isValidPositiveNumber(_ value: Double, min: Double = 0) -> Bool {

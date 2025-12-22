@@ -55,7 +55,7 @@ struct ReminderItem: Identifiable, Equatable {
     }
 }
 
-enum ReminderPriority {
+enum ReminderPriority: Comparable {
     case none
     case low
     case medium
@@ -67,6 +67,20 @@ enum ReminderPriority {
         case .low: return .blue
         case .medium: return .orange
         case .high: return .red
+        }
+    }
+    
+    // Higher priority is greater
+    static func < (lhs: ReminderPriority, rhs: ReminderPriority) -> Bool {
+        priorityValue(lhs) < priorityValue(rhs)
+    }
+    
+    private static func priorityValue(_ priority: ReminderPriority) -> Int {
+        switch priority {
+        case .none: return 0
+        case .low: return 1
+        case .medium: return 2
+        case .high: return 3
         }
     }
 }

@@ -1,105 +1,88 @@
 # Mneme
 
-Privacy-first personal operating system for your day. Mneme turns free-form notes into reminders, calendar events, health logs, finances, meals, work sessions, and insights using on-device Apple Foundation Models. Built with SwiftUI for iOS.
+<img src="https://www.mneme.website/assets/mneme-logo.png" width="120" alt="Mneme Logo">
 
-## Highlights
-- On-device understanding with Foundation Models + custom parsers; multilingual input (English, Turkish, French, Spanish, German, Italian, Portuguese, ...).
-- One notepad for everything: reminders, events, expenses, income, meals, activities, work start/end, calorie adjustments, journals with mood emoji.
-- Connected data: EventKit, HealthKit, Core Data mirrored to CloudKit with resilient local fallback.
-- Rich visuals: calories, finance, and productivity charts plus AI-generated daily pattern insights.
-- Privacy by default: no server dependency; optional iCloud sync and USDA calorie lookups only when needed.
+![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg) ![Swift: 6.0](https://img.shields.io/badge/Swift-6.0-orange.svg) ![Platform: iOS 26.1](https://img.shields.io/badge/Platform-iOS%2026.1-lightgrey.svg)
 
-## Tabs & Capabilities
-- **Notepad**: Debounced parsing of free-text (~1s); intent detection, slot extraction, validation; variable arithmetic (e.g., `+salary-rent`, `+protein_shake`); tags with shared palette; location and URL detection; quick "Done" processing to create reminders/events or log entries; keyboard-friendly multi-line editing.
-- **Reminders**: View/manage EventKit reminders created from parsed lines; keep tags and links attached.
-- **Calendar**: Create and edit calendar events with normalized titles, day/time sanitization, and optional locations/URLs.
-- **Daily Summary**: Calories consumed/burned/net, finances (income, expense, net), and productivity snapshots using the `Charts` module; shortcuts to settings.
-- **Analysis**: `SummaryInsightsService` correlates mood, work minutes, calories, and balance for the last 30 days using `SystemLanguageModel`, with deterministic heuristics as fallback.
-- **Settings**: Base currency, personal details, theme, and cloud sync status; currency conversion for mixed-currency entries.
-- **Health**: HealthKit-backed steps/active energy/distance plus activity calorie estimates; meals get calorie lookup via Foundation Models and USDA when available.
+💡 **What is Mneme?**
 
-## How Parsing Works
-1. Each notepad line is stored in `LineStore` (dictionary keyed by UUID for safe concurrent updates).
-2. `NotepadViewModel` debounces keystrokes, then calls `NLPService` which bridges `FoundationModelsNLP`, translation, and intent-specific parser services.
-3. `HandlerFactory` routes results to handlers (reminder, event, expense, income, meal, activity, work session, calorie adjustment, journal) to validate fields and build `ParsingResultItem`s.
-4. Successful lines create EventKit items, log work sessions, or write structured entries via `NotepadEntryStore`; tags, locations, and URLs are preserved.
-5. `PersistenceController` uses Core Data with CloudKit mirroring, falling back to a local store automatically.
-6. Charts and insights read from stores/HealthKit and render in SwiftUI with per-tab theming.
+Visit our website: [mneme.website](https://www.mneme.website)
 
-## Tech Stack
-- Swift + SwiftUI + async/await
-- Foundation Models (`SystemLanguageModel`, `Translation`) on-device
-- EventKit, HealthKit
-- Core Data + CloudKit mirroring (with local fallback)
-- SwiftUI Charts + custom chart components
-- Combine-powered stores and managers
+Mneme (pronounced *nee-mee*, named after the Muse of memory) turns your free-form thoughts into structured actions. Instead of juggling 5 different apps for your calendar, health, finance, and diary, you just type naturally. **Profoundly Intuitive. The intelligent workspace that understands you.**
 
-## Requirements
-- Xcode 16+ (Foundation Models require the 2025 toolchain)
-- iOS 26.1 for on-device models and Translation
-- iCloud account for CloudKit sync (optional; falls back to local persistence)
-- Physical iOS device for HealthKit data
+<p align="center">
+  <a href="https://www.mneme.website">
+    <img src="https://www.mneme.website/assets/notepad.png" width="600" alt="Mneme UI">
+  </a>
+</p>
 
-## Setup
-1. Clone the repo: `git clone <repo-url>` and `cd Mneme`.
-2. Open `Mneme.xcodeproj` in Xcode.
-3. Set your Development Team and bundle identifier.
-4. Configure an iCloud container ID in `Info.plist` and Signing & Capabilities if you want CloudKit sync; otherwise the app will run in local-only mode.
-5. Build & run on device or simulator (HealthKit features need a device). During first launch, complete permissions for Reminders, Calendar, Health, Notifications, and Location as prompted.
+Powered by Apple Foundation Models, everything happens on-device. Your data never touches a third-party server.
 
-## Usage
-- Type free-form notes in Notepad; parsing runs automatically after a short pause.
-- Review extracted fields (intent, subject, day/time, amount, currency, calories, distance, links).
-- Press "Done" to create reminders/events or log journal/meals/expenses/income/activities/work sessions.
-- View and edit items in Reminders/Calendar; explore charts and insights in Daily Summary and Analysis.
+## The Magic
 
-Example inputs:
-```
-remind me to call the dentist tomorrow at 2pm
-meeting with team on monday 10:00 @HQ
-bought coffee for 5 EUR
-earned 1000 USD from freelance work
-ate pizza 300g
-🙂 felt great after morning run 5km 30min
-work start project phoenix 09:00
-work end 18:15
-+salary-rent
-+1000$
-+100 kcal
--200 kcal etc.
-```
+### Smart Variables
+Mneme automatically detects monetary values, dates, and custom variables in your notes.
 
-## Data & Privacy
-- All NLP happens on-device; no third-party servers.
-- CloudKit sync is optional; if unavailable, data stays local.
-- HealthKit and EventKit access is explicit and only used for the features you enable.
-- Meal calorie lookup may contact USDA endpoints; everything else is offline.
+<img src="https://www.mneme.website/assets/variables.png" width="500" alt="Smart Variables">
 
-## Project Structure
-- `MnemeApp.swift`: app entry and shared environment objects.
-- `Views/`: SwiftUI screens (Notepad, Reminders, Calendar, Daily Summary, Analysis, Settings, onboarding/tutorial).
-- `ViewModels/`: UI coordinators (`NotepadViewModel`).
-- `Managers/`: Line, Tag, EventKit, Location, WorkSession coordination.
-- `Handlers/`: Intent-specific processors.
-- `Stores/`: Observable stores (entries, tags, user settings, currency settings, work sessions, cloud sync status).
-- `Services/`: NLP pipeline, parser services, EventKit/HealthKit/Currency/Translation, persistence, summaries.
-- `Charts/`: Chart components, models, utilities, and tabs.
-- `Models/`: Shared types and Core Data schema.
-- `Resources/Theme.swift`, `Assets.xcassets`: styling and assets.
-- `Mneme.xcodeproj/`: Xcode project configuration.
+### Synchronized Reminders
+Never miss a beat. Reminders are automatically created from your notes and synced across devices.
 
-## Contributing
-- Fork the repo, create a feature branch, and keep changes modular.
-- Prefer small, focused PRs with clear descriptions and screenshots when UI changes.
-- Follow Swift async/await patterns already in the codebase; avoid blocking the main thread.
-- Add tests when possible (in-memory persistence is available for isolation).
+<img src="https://www.mneme.website/assets/reminder.png" width="500" alt="Reminders">
 
-## Roadmap (early open-source)
-- Automated tests for parsing and handlers
-- Recurring event/reminder support
-- Export/backup options
-- Additional widgets/shortcuts for quick capture
-- More chart breakouts and filters
+### Unified Calendar & Events
+Seamlessly manage your schedule. Events extracted from your notes appear instantly in your calendar.
 
-## License
-Planned for open-source distribution; add a LICENSE file before public release.
+| Event Details | Calendar View |
+|:---:|:---:|
+| <img src="https://www.mneme.website/assets/eventdetails.png" width="300" alt="Event Details"> | <img src="https://www.mneme.website/assets/calendar.png" width="300" alt="Calendar"> |
+
+### Analytics & Insights
+Gain deep insights into your habits and data with detailed graphs and AI-powered analysis.
+
+| Detailed Graphs | AI Analysis |
+|:---:|:---:|
+| <img src="https://www.mneme.website/assets/graphs.png" width="300" alt="Graphs"> | <img src="https://www.mneme.website/assets/analysis.png" width="300" alt="Analysis"> |
+
+## Key Capabilities
+
+- ⚡️ **Frictionless Input**: One text field for everything. Debounced parsing understands intent, time, money, and calories instantly.
+- 🧠 **On-Device Intelligence**: Uses `SystemLanguageModel` and custom parsers to understand English, Turkish, French, German, and more. No cloud latency, no privacy risks.
+- 🔒 **Privacy First**: Your life stays on your phone. iCloud sync mirrors data across your devices, but logic runs locally.
+- 🔗 **Deep Integration**: Native support for EventKit (Calendar/Reminders) and HealthKit. It feels like part of iOS.
+- 📊 **Insightful**: Beautiful charts for finances and calories, plus AI-generated correlations (e.g., "You spend more money on days you don't sleep well").
+
+## 🛠 Tech Stack
+
+Designed for the modern Apple ecosystem, pushing the limits of what SwiftUI and on-device AI can do.
+
+- **Language**: Swift 6
+- **UI**: SwiftUI + Charts
+- **AI/NLP**: FoundationModels (`SystemLanguageModel`), Translation framework, Custom Regex Parsers.
+- **Persistence**: Core Data mirrored to CloudKit (with local fallback).
+- **Integrations**: EventKit, HealthKit.
+- **Architecture**: MVVM with centralized `ParsingService` and `LineStore`.
+
+## 🏗 How Parsing Works (The Engine)
+
+1. **Input**: User types in the Notepad. `NotepadViewModel` debounces the input.
+2. **NLP Pipeline**: The text is passed to `NLPService`, which utilizes on-device Foundation Models to classify intent (Event vs. Expense vs. Journal).
+3. **Extraction**: Specialized handlers (`MealHandler`, `FinanceHandler`, etc.) extract entities like Amount, Date, Calories using a mix of LLM extraction and deterministic regex for 100% accuracy on critical numbers.
+4. **Action**:
+    - **Health**: Writes directly to HealthKit (e.g., `DietaryEnergyConsumed`).
+    - **Calendar**: Syncs with EventKit.
+    - **Storage**: Saves structured data to Core Data for charts/history.
+
+## 🤝 Contributing
+
+Contributions are welcome! Whether it's fixing a bug, improving the parser for a new language, or adding a new chart type.
+
+1. Fork the Project
+2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the Branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+## ⚖️ License & Copyright
+
+Source Code: The source code of Mneme is licensed under the **GNU General Public License v3.0 (GPLv3)**. You are free to use, modify, and distribute the code, provided that any derivative works are also open-source under the same license. See [LICENSE](LICENSE) for details.

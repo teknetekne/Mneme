@@ -57,6 +57,13 @@ final class EventKitService: ObservableObject {
         }
     }
     
+    // MARK: - Calendars
+    
+    func getCalendars(for entityType: EKEntityType) -> [EKCalendar] {
+        guard isAuthorized else { return [] }
+        return eventStore.calendars(for: entityType)
+    }
+    
     // MARK: - Events
     
     func getEvents(startDate: Date, endDate: Date) -> [EKEvent] {
@@ -77,7 +84,8 @@ final class EventKitService: ObservableObject {
         endDate: Date,
         notes: String?,
         location: String? = nil,
-        url: URL? = nil
+        url: URL? = nil,
+        calendar: EKCalendar? = nil
     ) async throws -> EKEvent {
         guard isAuthorized else {
             throw EventKitError.notAuthorized
@@ -90,7 +98,7 @@ final class EventKitService: ObservableObject {
         event.notes = notes
         event.location = location
         event.url = url
-        event.calendar = eventStore.defaultCalendarForNewEvents
+        event.calendar = calendar ?? eventStore.defaultCalendarForNewEvents
         
         try eventStore.save(event, span: .thisEvent, commit: true)
         return event
@@ -154,7 +162,9 @@ final class EventKitService: ObservableObject {
         dueDate: Date?,
         notes: String? = nil,
         locationName: String? = nil,
-        url: URL? = nil
+        url: URL? = nil,
+        priority: Int = 0,
+        calendar: EKCalendar? = nil
     ) async throws -> EKReminder {
         guard isAuthorized else {
             throw EventKitError.notAuthorized
@@ -164,7 +174,8 @@ final class EventKitService: ObservableObject {
         reminder.title = title
         reminder.notes = notes
         reminder.url = url
-        reminder.calendar = eventStore.defaultCalendarForNewReminders()
+        reminder.priority = priority
+        reminder.calendar = calendar ?? eventStore.defaultCalendarForNewReminders()
         
         if let dueDate = dueDate {
             let alarm = EKAlarm(absoluteDate: dueDate)

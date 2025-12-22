@@ -64,19 +64,22 @@ nonisolated struct TextParsingHelpers {
     nonisolated static func extractCurrency(from text: String) -> String? {
         let lowered = text.lowercased()
         
-        // Check for currency symbols
-        if lowered.contains("$") || lowered.contains("usd") || lowered.contains("dollar") {
-            return "USD"
+        // 1. Check for symbols first (exact match or contained)
+        for currency in Currency.all {
+            let symbol = currency.symbol.lowercased()
+            // Avoid matching common letters if symbol is just letters (like "kr" or "lei")
+            // unless it's surrounded by non-letters or valid context.
+            // But for symbols like $, €, £, it's safer.
+            if !symbol.allSatisfy({ $0.isLetter }) {
+                 if lowered.contains(symbol) {
+                     return currency.code
+                 }
+            }
         }
-        if lowered.contains("€") || lowered.contains("eur") || lowered.contains("euro") {
-            return "EUR"
-        }
-        if lowered.contains("₺") || lowered.contains("try") || lowered.contains("turkish lira") || lowered.contains("lira") {
-            return "TRY"
-        }
-        if lowered.contains("£") || lowered.contains("gbp") || lowered.contains("pound") {
-            return "GBP"
-        }
+        
+        // 2. Check for explicit currency codes or names
+        // We can check `Currency.all` codes.
+        // Also handling specific common aliases manually if needed, but Currency model has name/code.
         
         // Check for 3-letter currency codes
         let codePattern = #"\b([a-z]{3})\b"#
@@ -91,12 +94,17 @@ nonisolated struct TextParsingHelpers {
                 guard codeRange.location != NSNotFound else { continue }
                 
                 let code = ns.substring(with: codeRange).uppercased()
-                let validCodes = ["USD", "EUR", "TRY", "GBP", "JPY", "CNY", "CAD", "AUD"]
-                if validCodes.contains(code) {
+                if Currency.supportedCodes.contains(code) {
                     return code
                 }
             }
         }
+        
+        // Fallback for some common names if needed
+        if lowered.contains("dollar") { return "USD" }
+        if lowered.contains("euro") { return "EUR" }
+        if lowered.contains("lira") { return "TRY" }
+        if lowered.contains("pound") { return "GBP" }
         
         return nil
     }
@@ -236,33 +244,24 @@ nonisolated struct TextParsingHelpers {
         guard !trimmed.isEmpty else { return nil }
         let upper = trimmed.uppercased()
         
-        switch upper {
-        case "$":
-            return "USD"
-        case "€":
-            return "EUR"
-        case "£":
-            return "GBP"
-        case "₺", "TL", "YTL":
-            return "TRY"
-        default:
-            if upper == "USD" || upper == "US$" {
-                return "USD"
-            }
-            if upper == "EUR" {
-                return "EUR"
-            }
-            if upper == "TRY" {
-                return "TRY"
-            }
-            if upper == "GBP" {
-                return "GBP"
-            }
-            if upper.count == 3, upper.allSatisfy({ $0.isLetter }) {
-                return upper
-            }
-            return nil
+        // 1. Direct code match
+        if Currency.supportedCodes.contains(upper) {
+            return upper
         }
+        
+        // 2. Symbol match
+        if let currency = Currency.all.first(where: { $0.symbol == trimmed }) {
+            return currency.code
+        }
+        
+        // 3. Common aliases
+        switch upper {
+        case "TL", "YTL": return "TRY"
+        case "US$": return "USD"
+        default: break
+        }
+        
+        return nil
     }
 }
 

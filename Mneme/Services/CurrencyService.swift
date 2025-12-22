@@ -14,7 +14,7 @@ final class CurrencyService {
     
     private var ratesCache: [String: [String: Double]] = [:]
     private var cacheTimestamps: [String: Date] = [:]
-    private let cacheValidityHours: TimeInterval = 24
+    private let cacheValidityHours: TimeInterval = 6
     
     private let persistence: Persistence
     
@@ -91,6 +91,20 @@ final class CurrencyService {
     /// Trigger a refresh of exchange rates from the API
     /// This should be called on app launch
     func refreshRates() async {
+        // Check if we have valid rates in storage first
+        if let storedRates = await loadRatesFromStorage() {
+             // We have valid (not expired) rates, so just update in-memory cache
+             // and skip API call
+             var normalizedRates: [String: Double] = [:]
+             for (key, value) in storedRates {
+                 normalizedRates[key.uppercased()] = value
+             }
+             ratesCache["usd"] = normalizedRates
+             cacheTimestamps["usd"] = Date()
+             return
+        }
+        
+        // No valid rates found, fetch from API
         if let rates = await fetchRatesFromAPI() {
             await saveRatesToStorage(rates)
             
@@ -117,9 +131,6 @@ final class CurrencyService {
         
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
-        
-        // Use HTTP Header method (more secure, recommended by freecurrencyapi.com)
-        // Documentation: https://freecurrencyapi.com/docs/#authentication-methods
         request.setValue(apiKey, forHTTPHeaderField: "apikey")
         
         do {
@@ -131,7 +142,6 @@ final class CurrencyService {
             
             let statusCode = httpResponse.statusCode
             
-            // Check for rate limit (429)
             if statusCode == 429 {
                 return nil
             }
@@ -140,7 +150,6 @@ final class CurrencyService {
                 return nil
             }
             
-            // Parse response: { "data": { "AUD": 1.5125001942, ... } }
             guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
                 return nil
             }
