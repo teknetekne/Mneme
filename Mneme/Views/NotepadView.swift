@@ -342,17 +342,9 @@ struct NotepadContent: View {
             }
                 ToolbarItem(placement: .confirmationAction) {
                     Group {
-                        #if os(iOS)
                         Button("Done", systemImage: "checkmark", role: .confirm) {
                             finishEditing()
                         }
-                        #else
-                        Button {
-                            finishEditing()
-                        } label: {
-                            Label("Done", systemImage: "checkmark")
-                        }
-                        #endif
                     }
                     .tint(.orange)
                     .disabled(!viewModel.allLinesParsedSuccessfully)

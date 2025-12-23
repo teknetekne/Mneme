@@ -39,8 +39,8 @@ struct PermissionsOnboardingView: View {
                     .id("title-\(currentStage)")
                 
                 Text(currentStage == .health
-                     ? "Mneme needs access to your health data to track your daily stats like steps, calories, and focus time."
-                     : "Mneme needs access to your calendar and reminders to help you organize your schedule effectively.")
+                     ? "Mneme needs access to your health data to track personal health metrics and biological information. You can choose what to share on the next screen."
+                     : "Mneme needs access to your calendar and reminders to help you organize your schedule effectively. You can choose what to share on the next screen.")
                     .font(.body)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -128,9 +128,9 @@ struct PermissionsOnboardingView: View {
     private func getButtonTitle() -> String {
         switch currentStage {
         case .health:
-            return healthKitAuthorized ? "Continue" : "Enable Health Access"
+            return "Continue"
         case .calendar:
-            return eventKitAuthorized ? "Get Started" : "Enable Calendar Access"
+            return "Continue"
         }
     }
     
