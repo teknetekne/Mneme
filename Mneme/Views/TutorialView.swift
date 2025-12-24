@@ -17,7 +17,7 @@ struct TutorialView: View {
         TutorialPage(
             image: "mic.fill",
             title: "Just Say It",
-            description: "Type or speak naturally. Mneme understands:\n\n• \"Meeting with team tomorrow at 10am @Apple Park\"\n• \"Read https://apple.com\"\n• \"Spent $50 on groceries\"\n• \"Ran 5km in 30 mins\"",
+            description: "Type or speak naturally. Mneme understands:\n\n• \"Meeting with team tomorrow at 10am @Apple Park\"\n• \"Spent $50 on groceries\"\n• \"Ran 5km in 30 mins\"",
             color: .purple
         ),
         TutorialPage(
