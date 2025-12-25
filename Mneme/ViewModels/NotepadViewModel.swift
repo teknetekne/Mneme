@@ -33,6 +33,13 @@ final class NotepadViewModel: ObservableObject {
     // Lines now managed by lineStore (dictionary-based)
     var lines: [LineViewModel] { lineStore.lines }  // Computed property
     @Published var lineParsingResults: [UUID: [ParsingResultItem]] = [:]  // Parsing results for each line
+    @Published var manualOverrides: [UUID: LineOverride] = [:]
+    
+    struct LineOverride {
+        var subject: String?
+        var date: Date?
+    }
+    
     @Published var snackbarMessage: String = ""
     @Published var snackbarTitle: String = ""
     @Published var showSnackbar: Bool = false
@@ -258,7 +265,8 @@ final class NotepadViewModel: ObservableObject {
     
     func resetLines() {
         lineStore.resetToInitialState()
-        lineParsingResults = [:]  // Clear results directly
+        lineParsingResults.removeAll()
+        manualOverrides.removeAll()
         locationManager.clearAllData()
     }
     
@@ -315,8 +323,8 @@ final class NotepadViewModel: ObservableObject {
     
     // MARK: - Reminder/Event Detection
     
-    var reminderEvents: [(id: UUID, type: String, subject: String, displayName: String, day: String?, time: String?)] {
-        var events: [(id: UUID, type: String, subject: String, displayName: String, day: String?, time: String?)] = []
+    var reminderEvents: [(id: UUID, type: String, subject: String, displayName: String, day: String?, time: String?, rawDay: String?, rawTime: String?)] {
+        var events: [(id: UUID, type: String, subject: String, displayName: String, day: String?, time: String?, rawDay: String?, rawTime: String?)] = []
         
         for line in lines where line.status != .error {
             guard let results = lineParsingResults[line.id] else { continue }
@@ -325,28 +333,78 @@ final class NotepadViewModel: ObservableObject {
             }
             
             let normalizedIntent = NotepadFormatter.normalizeIntentForCheck(intentItem.value)
+            
+            // Determine if it's an event or reminder
+            let isReminder = normalizedIntent == "reminder"
+            let isEvent = normalizedIntent == "event"
+            
+            guard isReminder || isEvent else { continue }
+            
             let hasReminderTime = results.contains { $0.field == "Reminder Time" && $0.isValid }
             let fallbackReminderTime = results.contains { $0.field == "Event Time" && $0.isValid }
             let hasEventTime = results.contains { $0.field == "Event Time" && $0.isValid }
             let fallbackEventTime = results.contains { $0.field == "Reminder Time" && $0.isValid }
             
-            if normalizedIntent == "reminder" && (hasReminderTime || fallbackReminderTime) {
-                let (subject, displayName) = formattedSubject(from: results, fallbackLabel: "Reminder")
-                let day = firstValidValue(in: results, fields: ["Reminder Day", "Event Day"])
-                let time = firstValidValue(in: results, fields: ["Reminder Time", "Event Time"])
-                events.append((id: line.id, type: "reminder", subject: subject, displayName: displayName, day: day, time: time))
-            } else if normalizedIntent == "event" && (hasEventTime || fallbackEventTime) {
-                let (subject, displayName) = formattedSubject(from: results, fallbackLabel: "Event")
-                let day = firstValidValue(in: results, fields: ["Event Day", "Reminder Day"])
-                var time = firstValidValue(in: results, fields: ["Event Time", "Reminder Time"])
-                if time == nil && day != nil {
-                    time = "12:00" // Default to noon when day is present but time missing
+            if isReminder && (hasReminderTime || fallbackReminderTime) {
+                let (subject, displayName) = overriddenSubject(for: line.id, from: results, fallbackLabel: "Reminder")
+                let (day, time, rawDay, rawTime) = overriddenDateTime(for: line.id, from: results, fields: ["Day": ["Reminder Day", "Event Day"], "Time": ["Reminder Time", "Event Time"]])
+                
+                events.append((id: line.id, type: "reminder", subject: subject, displayName: displayName, day: day, time: time, rawDay: rawDay, rawTime: rawTime))
+            } else if isEvent && (hasEventTime || fallbackEventTime) {
+                let (subject, displayName) = overriddenSubject(for: line.id, from: results, fallbackLabel: "Event")
+                let (day, time, rawDay, rawTime) = overriddenDateTime(for: line.id, from: results, fields: ["Day": ["Event Day", "Reminder Day"], "Time": ["Event Time", "Reminder Time"]])
+                
+                var finalTime = time
+                if finalTime == nil && day != nil {
+                    finalTime = "12:00"
                 }
-                events.append((id: line.id, type: "event", subject: subject, displayName: displayName, day: day, time: time))
+                
+                events.append((id: line.id, type: "event", subject: subject, displayName: displayName, day: day, time: finalTime, rawDay: rawDay, rawTime: rawTime))
             }
         }
         
         return events
+    }
+
+    private func overriddenSubject(for id: UUID, from results: [ParsingResultItem], fallbackLabel: String) -> (String, String) {
+        if let manual = manualOverrides[id]?.subject {
+            return (manual, manual)
+        }
+        return formattedSubject(from: results, fallbackLabel: fallbackLabel)
+    }
+
+    private func overriddenDateTime(for id: UUID, from results: [ParsingResultItem], fields: [String: [String]]) -> (day: String?, time: String?, rawDay: String?, rawTime: String?) {
+        if let manualDate = manualOverrides[id]?.date {
+            let df = DateFormatter()
+            df.dateFormat = "yyyy-MM-dd"
+            let isoDay = df.string(from: manualDate)
+            df.dateFormat = "HH:mm"
+            let isoTime = df.string(from: manualDate)
+            
+            let displayDay = NotepadFormatter.formatDayForDisplay(isoDay)
+            let displayTime = NotepadFormatter.formatTimeForDisplay(isoTime)
+            
+            return (displayDay, displayTime, isoDay, isoTime)
+        }
+        
+        let dayKeys = fields["Day"] ?? []
+        let timeKeys = fields["Time"] ?? []
+        
+        let day = firstValidValue(in: results, fields: dayKeys)
+        let time = firstValidValue(in: results, fields: timeKeys)
+        let rawDay = firstRawValue(in: results, fields: dayKeys)
+        let rawTime = firstRawValue(in: results, fields: timeKeys)
+        
+        return (day, time, rawDay, rawTime)
+    }
+
+    private func firstRawValue(in results: [ParsingResultItem], fields: [String]) -> String? {
+        for field in fields {
+            if let item = results.first(where: { $0.field == field && $0.isValid }) {
+                return item.value
+            }
+        }
+        return nil
     }
     
     var hasReminderOrEvent: Bool {
@@ -586,8 +644,18 @@ final class NotepadViewModel: ObservableObject {
     }
     
     /// Convert ParsingResultItem array to ParsedResult
-    private func convertToParseResult(from items: [ParsingResultItem]) -> ParsedResult {
+    // MARK: - Text Reconstruction
+    
+
+    
+    func updateLineFromEdit(lineId: UUID, title: String, date: Date, isReminder: Bool) {
+        manualOverrides[lineId] = LineOverride(subject: title, date: date)
+    }
+    
+    private func convertToParseResult(from items: [ParsingResultItem], for lineId: UUID? = nil) -> ParsedResult {
         var result = ParsedResult()
+        
+        let overrides = lineId.flatMap { manualOverrides[$0] }
         
         for item in items {
             switch item.field {
@@ -605,24 +673,54 @@ final class NotepadViewModel: ObservableObject {
             case "Event Time":
                 result.eventTime = SlotPrediction(value: item.value, confidence: item.confidence ?? 1.0, source: .foundationModel)
             case "Amount":
-                // Extract amount from value string (e.g., "+100.00 USD")
                 if let amountValue = TextParsingHelpers.extractFirstNumber(from: item.value) {
                     result.amount = SlotPrediction(value: amountValue, confidence: item.confidence ?? 1.0, source: .foundationModel)
                 }
-                // Extract currency
                 if let currencyValue = TextParsingHelpers.extractCurrency(from: item.value) {
                     result.currency = SlotPrediction(value: currencyValue, confidence: item.confidence ?? 1.0, source: .foundationModel)
                 }
             case "Calories", "Calories Burned":
-                // Extract calories from value string (e.g., "+500 kcal" or "-300 kcal")
                 if let calorieValue = TextParsingHelpers.extractFirstNumber(from: item.value) {
                     result.mealKcal = SlotPrediction(value: calorieValue, confidence: item.confidence ?? 1.0, source: .foundationModel)
                 }
             case "Currency":
                 result.currency = SlotPrediction(value: item.value, confidence: item.confidence ?? 1.0, source: .foundationModel)
+            case "Location":
+                result.location = SlotPrediction(value: item.value, confidence: item.confidence ?? 1.0, source: .foundationModel)
+            case "URL":
+                result.url = SlotPrediction(value: item.value, confidence: item.confidence ?? 1.0, source: .foundationModel)
+            case "Mood":
+                result.moodEmoji = SlotPrediction(value: item.value, confidence: item.confidence ?? 1.0, source: .foundationModel)
+            case "Duration":
+                if let durationValue = TextParsingHelpers.extractFirstNumber(from: item.value) {
+                    result.duration = SlotPrediction(value: durationValue, confidence: item.confidence ?? 1.0, source: .foundationModel)
+                }
+            case "Distance":
+                if let distanceValue = TextParsingHelpers.extractFirstNumber(from: item.value) {
+                    result.distance = SlotPrediction(value: distanceValue, confidence: item.confidence ?? 1.0, source: .foundationModel)
+                }
             default:
                 break
             }
+        }
+        
+        // Apply overrides
+        if let manualSubject = overrides?.subject {
+            result.object = SlotPrediction(value: manualSubject, confidence: 1.0, source: .manual)
+        }
+        
+        if let manualDate = overrides?.date {
+            let df = DateFormatter()
+            df.dateFormat = "yyyy-MM-dd"
+            let dayString = df.string(from: manualDate)
+            df.dateFormat = "HH:mm"
+            let timeString = df.string(from: manualDate)
+            
+            // Apply to both reminder and event fields to be safe
+            result.reminderDay = SlotPrediction(value: dayString, confidence: 1.0, source: .manual)
+            result.reminderTime = SlotPrediction(value: timeString, confidence: 1.0, source: .manual)
+            result.eventDay = SlotPrediction(value: dayString, confidence: 1.0, source: .manual)
+            result.eventTime = SlotPrediction(value: timeString, confidence: 1.0, source: .manual)
         }
         
         return result
@@ -676,6 +774,8 @@ final class NotepadViewModel: ObservableObject {
         debounceTasks.removeValue(forKey: lineId)
     }
     
+
+    
     func processLines() async {
         // Process all non-empty lines
         let nonEmptyLines = lines.filter { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
@@ -695,7 +795,7 @@ final class NotepadViewModel: ObservableObject {
             }
             
             let intent = NotepadFormatter.normalizeIntentForCheck(intentItem.value)
-            let parsedResult = convertToParseResult(from: results)
+            let parsedResult = convertToParseResult(from: results, for: line.id)
             let entry = ParsedNotepadEntry.from(parsedResult: parsedResult, originalText: line.text)
 
             // Then handle intent-specific actions

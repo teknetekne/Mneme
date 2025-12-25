@@ -48,7 +48,9 @@ struct LineRowView: View {
                         set: { isFirst in
                             if isFirst && !isLocationSearchActive && !isModalPresented {
                                 focusedLineId.wrappedValue = line.id
-                                lineStore.focus(line.id)
+                                if lineStore.focusedId != line.id {
+                                    lineStore.focus(line.id)
+                                }
                             }
                         }
                     ),

@@ -47,12 +47,14 @@ struct NotepadContent: View {
     @State private var showMoodPicker = false
     @State private var moodPickerLineId: UUID?
     
+    @State private var draftItemToEdit: (id: UUID, subject: String, date: Date, isReminder: Bool)?
+    
     // MARK: - Init
     // Implicit memberwise init is sufficient for ObservedObjects passed from parent
     
     // MARK: - Computed Properties
     
-    private var reminderEvents: [(id: UUID, type: String, subject: String, displayName: String, day: String?, time: String?)] {
+    private var reminderEvents: [(id: UUID, type: String, subject: String, displayName: String, day: String?, time: String?, rawDay: String?, rawTime: String?)] {
         viewModel.reminderEvents
     }
     
@@ -67,7 +69,7 @@ struct NotepadContent: View {
     }
     
     private var isAnyModalPresented: Bool {
-        showVariableDialog || showActiveWorkMenu || showAddTagSheet || tagBeingEdited != nil
+        showVariableDialog || showActiveWorkMenu || showAddTagSheet || tagBeingEdited != nil || draftItemToEdit != nil
     }
 
 
@@ -82,7 +84,7 @@ struct NotepadContent: View {
             }
             .onReceive(lineStore.$focusedId) { newValue in
                 // Prevent focus stealing when modals are presented
-                guard !showVariableDialog && !showActiveWorkMenu && !showAddTagSheet && tagBeingEdited == nil else { return }
+                guard !isAnyModalPresented else { return }
                 guard focusedLineId != newValue else { return }
                 focusedLineId = newValue
             }
@@ -307,6 +309,49 @@ struct NotepadContent: View {
                 },
                 onCancel: {
                     showAddTagSheet = false
+                }
+            )
+        }
+        .sheet(item: Binding(
+            get: { draftItemToEdit.map { DraftWrapper(id: $0.id, subject: $0.subject, date: $0.date, isReminder: $0.isReminder) } },
+            set: { _ in draftItemToEdit = nil }
+        )) { wrapper in
+            DraftEventEditor(
+                title: Binding(
+                    get: { wrapper.subject },
+                    set: { 
+                        if var item = draftItemToEdit {
+                            item.subject = $0
+                            draftItemToEdit = item
+                        }
+                    }
+                ),
+                date: Binding(
+                    get: { wrapper.date },
+                    set: {
+                        if var item = draftItemToEdit {
+                            item.date = $0
+                            draftItemToEdit = item
+                        }
+                    }
+                ),
+                isReminder: Binding(
+                    get: { wrapper.isReminder },
+                    set: {
+                        if var item = draftItemToEdit {
+                            item.isReminder = $0
+                            draftItemToEdit = item
+                        }
+                    }
+                ),
+                onSave: {
+                    if let item = draftItemToEdit {
+                        viewModel.updateLineFromEdit(lineId: item.id, title: item.subject, date: item.date, isReminder: item.isReminder)
+                    }
+                    draftItemToEdit = nil
+                },
+                onCancel: {
+                    draftItemToEdit = nil
                 }
             )
         }
@@ -594,10 +639,14 @@ struct NotepadContent: View {
                         }
                         locationSearchService.searchQuery = ""
                         // Focus on search field after animation
-        // Focus on search field after animation
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
                             isLocationSearchFocused = true
                         }
+                    },
+                    onEdit: {
+                        // Use rawDay and rawTime for robust parsing back to Date
+                        let date = DateHelper.parseDate(dayLabel: event.rawDay, timeString: event.rawTime) ?? Date()
+                        draftItemToEdit = (event.id, event.subject, date, event.type == "reminder")
                     }
                 )
             }
@@ -678,6 +727,13 @@ struct NotepadContent: View {
         DateHelper.applyTimeFormat(formatter)
         return formatter.string(from: date)
     }
+}
+
+private struct DraftWrapper: Identifiable {
+    let id: UUID
+    var subject: String
+    var date: Date
+    var isReminder: Bool
 }
 
 #Preview("Light") {

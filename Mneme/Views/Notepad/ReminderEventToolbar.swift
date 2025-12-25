@@ -15,6 +15,8 @@ struct ReminderEventToolbar: View {
     let onEditTag: (Tag) -> Void
     let onDeleteTag: (Tag) -> Void
     let onAddLocation: () -> Void
+    let onEdit: () -> Void
+
     
     @State private var showDetails = false
     
@@ -53,7 +55,12 @@ struct ReminderEventToolbar: View {
                     .buttonStyle(.plain)
                     
                     if showDetails {
-                        detailsView
+                        Button {
+                            onEdit()
+                        } label: {
+                            detailsView
+                        }
+                        .buttonStyle(.plain)
                     }
                 
                 ForEach(sortedTags, id: \.id) { tag in

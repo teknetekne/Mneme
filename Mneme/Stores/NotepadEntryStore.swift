@@ -144,6 +144,23 @@ final class NotepadEntryStore: NSObject, ObservableObject {
     }
     
     @MainActor
+    func deleteEntry(_ entry: ParsedNotepadEntry) {
+        Task {
+            try? await persistence.performBackgroundTask { context in
+                let fetchRequest: NSFetchRequest<ParsedEntry> = ParsedEntry.fetchRequest()
+                fetchRequest.predicate = NSPredicate(format: "id == %@", entry.id as CVarArg)
+                
+                if let results = try? context.fetch(fetchRequest), let entity = results.first {
+                    context.delete(entity)
+                }
+                return ()
+            }
+            // Notify listeners to update immediately
+            NotificationCenter.default.post(name: .notepadEntryDeleted, object: nil)
+        }
+    }
+    
+    @MainActor
     func addEntry(_ entry: ParsedNotepadEntry) {
         Task {
             try? await persistence.performBackgroundTask { context in
@@ -214,4 +231,7 @@ extension NotepadEntryStore: NSFetchedResultsControllerDelegate {
             refreshEntries()
         }
     }
+}
+extension Notification.Name {
+    static let notepadEntryDeleted = Notification.Name("NotepadEntryDeleted")
 }
