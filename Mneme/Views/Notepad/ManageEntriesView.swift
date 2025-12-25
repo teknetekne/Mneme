@@ -116,6 +116,7 @@ struct ManageEntriesView: View {
         }
     }
     
+    @MainActor
     private func reprocessEntry(_ oldEntry: ParsedNotepadEntry, newText: String) async {
         isProcessing = true
         defer { isProcessing = false }
@@ -134,8 +135,11 @@ struct ManageEntriesView: View {
             }
             
             // Construct result manually from expression
+            let extractedCurrency = TextParsingHelpers.extractCurrency(from: expressionResult.value) ?? CurrencySettingsStore.shared.baseCurrency
+            
             finalResult = ParsedResult(
                 intent: SlotPrediction(value: intent, confidence: 1.0, source: .manual),
+                currency: SlotPrediction(value: extractedCurrency, confidence: 1.0, source: .manual),
                 amount: expressionResult.field == "Amount" ? SlotPrediction(value: TextParsingHelpers.extractFirstNumber(from: expressionResult.value) ?? 0, confidence: 1.0, source: .manual) : nil,
                 mealKcal: expressionResult.field == "Calories" ? SlotPrediction(value: TextParsingHelpers.extractFirstNumber(from: expressionResult.value) ?? 0, confidence: 1.0, source: .manual) : nil
             )
