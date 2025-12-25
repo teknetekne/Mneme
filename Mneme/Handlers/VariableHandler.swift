@@ -142,16 +142,21 @@ final class VariableHandler {
     }
     
     func evaluateExpression(_ text: String, baseCurrency: String) -> ParsingResultItem? {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        
+        // Normalize text: replace smart dashes and sanitize
+        let sanitized = text
+            .replacingOccurrences(of: "–", with: "-") // En-dash
+            .replacingOccurrences(of: "—", with: "-") // Em-dash
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            
         // Check if text contains operators (+ or -)
         // Must contain at least one operator to be an expression
-        let hasOperator = trimmed.contains("+") || trimmed.contains("-")
+        let hasOperator = sanitized.contains("+") || sanitized.contains("-")
         guard hasOperator else { return nil }
         
         // Normalize: if doesn't start with +/-, prepend + to first term
-        var normalizedText = trimmed
+        var normalizedText = sanitized
         if !normalizedText.hasPrefix("+") && !normalizedText.hasPrefix("-") {
+             // Avoid double operator if first char is already handled (unlikely given check above)
             normalizedText = "+" + normalizedText
         }
         
