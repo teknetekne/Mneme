@@ -146,7 +146,9 @@ struct LineTextView: UIViewRepresentable {
             if parent.text != newText {
                 parent.text = newText
             }
-            parent.isFirstResponder = textView.isFirstResponder
+            if parent.isFirstResponder != textView.isFirstResponder {
+                parent.isFirstResponder = textView.isFirstResponder
+            }
             parent.updatePlaceholder(in: textView)
             
             DispatchQueue.main.async {
@@ -200,3 +202,4 @@ private final class FocusableTextView: UITextView {
     }
 }
 #endif
+

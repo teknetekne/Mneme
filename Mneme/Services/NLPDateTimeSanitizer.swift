@@ -89,6 +89,13 @@ nonisolated struct NLPDateTimeSanitizer {
         ].compactMap { $0 }
         
         cleaned = replaceMatches(in: cleaned, regexes: relativeRegexes)
+        
+        // Additional cleanup for common temporal suffixes or standalone words that might be missed
+        let temporalSuffixes = ["'da", "'de", "'ta", "'te", "'yu", "'yi", "'u", "'i"]
+        for suffix in temporalSuffixes {
+            cleaned = cleaned.replacingOccurrences(of: suffix, with: " ", options: [.caseInsensitive])
+        }
+        
         cleaned = cleaned.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
         return cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
     }

@@ -5,6 +5,7 @@ import Foundation
 enum FusionSource: String, Sendable {
     case pattern
     case foundationModel
+    case manual
 }
 
 nonisolated struct PatternSlot<T> {

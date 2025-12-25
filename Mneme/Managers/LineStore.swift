@@ -186,10 +186,14 @@ final class LineStore: ObservableObject {
     
     func focus(_ id: UUID?) {
         if let id, let line = linesById[id], line.isActive {
-            focusedId = id
+            if focusedId != id {
+                focusedId = id
+            }
         } else {
             if let firstActive = lineOrder.first(where: { linesById[$0]?.isActive == true }) {
-                focusedId = firstActive
+                if focusedId != firstActive {
+                    focusedId = firstActive
+                }
             }
         }
     }

@@ -1,46 +1,38 @@
 import Foundation
 import FoundationModels
-
 @Generable(description: "Refined title response")
 private struct TitleRefinementResponse {
     @Guide(description: """
-        Extract CORE ACTION/SUBJECT from user text, removing all auxiliary verbs and temporal expressions.
+        You are a smart calendar assistant. Your goal is to generate a concise, natural DISPLAY TITLE for an event based on the user's input.
         
-        REMOVE these verb types:
-        - Reminder verbs: remind, remember, hatırlat, rappeler, recordar, erinnern
-        - Scheduling verbs: schedule, book, reserve, planla, réserver, reservar, buchen
-        - Action verbs: need to, have to, should, must, gonna, going to, will
-        - Auxiliary verbs: do, does, did, am, is, are, was, were
+        CONTEXT:
+        The date and time have already been extracted. Your job is ONLY the title.
         
-        REMOVE temporal expressions:
-        - Time: at noon, at 3pm, tomorrow, today, next week, öğlen, yarın, bugün, demain
-        - Relative: later, soon, after, before, in 5 minutes, 5 minutes later, sonra, önce, plus tard
-        - Absolute: Monday, January, 2025, Pazartesi, Ocak
+        GUIDELINES:
+        1. Identify the Core Activity: What is actually happening? (Meeting, Dinner, Call, Shopping).
+        2. Preserve People/Context: "Meeting" is too vague. "Meeting with Alice" is perfect. Always keep WHO the event is with.
+        3. Remove Redundancy verbs: Remove "var", "yap", "planla", "remind", "schedule". (e.g., "Toplantı var" -> "Toplantı").
+        4. Remove Temporal Suffixes: usage like "Çarşamba günü" -> remove BOTH "Çarşamba" and "günü".
+        5. Preserve Compound Nouns: "Dinner" is generic, but "Gala Dinner" is specific. Keep specific phrases.
+        6. Preserve Language: Output within the same language and alphabet as the input.
         
-        KEEP:
-        - Core action: take medicine, call mom, dinner, meeting
-        - Named entities: John, Starbucks, Paris (preserve case and diacritics)
-        - Essential context: with John, for project, about budget
-        
-        FORMAT: lowercase_with_underscores
-        
-        Examples:
-        'remind me to take medicine at noon' -> 'take_medicine'
-        'öğlen ilaç içmemi hatırlat' -> 'ilac_ic'
-        'schedule dinner with John tomorrow' -> 'dinner_with_john'
-        'yarın John ile toplantı planla' -> 'john_ile_toplanti'
-        'call mom' -> 'call_mom'
-        'annemi ara' -> 'annemi_ara'
+        EXAMPLES:
+        Input: "Yarın sabah Ahmet'le toplantı var" -> Output: "Ahmet'le Toplantı"
+        Input: "Online toplantım var yarın" -> Output: "Online Toplantı"
+        Input: "Kankalarla halı saha çarşamba günü" -> Output: "Kankalarla Halı Saha"
+        Input: "Buse ile konser" -> Output: "Buse ile Konser"
+        Input: "Schedule a dentist appointment for Friday" -> Output: "Dentist Appointment"
+        Input: "Akşam yemeği planla" -> Output: "Akşam Yemeği"
+        Input: "Annemi aramayı hatırlat" -> Output: "Annemi Ara"
+        Input: "Öğlen ilaç içmemi anımsat" -> Output: "İlaç İç"
+        Input: "Meeting with marketing team" -> "Meeting with Marketing Team"
         """)
     let title: String
 }
-
 actor TitleRefinementService {
     static let shared = TitleRefinementService()
-
     private let model: SystemLanguageModel
     private let instructions: Instructions
-
     init() {
         self.model = SystemLanguageModel.default
         self.instructions = Instructions(
@@ -51,12 +43,10 @@ actor TitleRefinementService {
             """
         )
     }
-
     func refineTitle(originalText: String, fallbackTitle: String, intent: String, dayLabel: String?, timeLabel: String?) async -> String {
         guard model.availability == .available else {
             return sanitize(fallbackTitle, fallback: fallbackTitle)
         }
-
         let context = """
         intent: \(intent)
         fallback_title: \(fallbackTitle.replacingOccurrences(of: "_", with: " "))
@@ -64,7 +54,6 @@ actor TitleRefinementService {
         time: \(timeLabel ?? "unknown")
         user_text: \(originalText)
         """
-
         do {
             let session = LanguageModelSession(instructions: instructions)
             let prompt = Prompt(context)
@@ -74,7 +63,6 @@ actor TitleRefinementService {
                 options: GenerationOptions(),
                 prompt: { prompt }
             )
-
             let cleaned = sanitize(response.content.title, fallback: fallbackTitle)
             return cleaned
         } catch is LanguageModelSession.GenerationError {

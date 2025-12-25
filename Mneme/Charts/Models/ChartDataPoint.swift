@@ -60,3 +60,4 @@ enum ChartType {
         }
     }
 }
+
