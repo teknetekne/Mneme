@@ -37,11 +37,28 @@ final class DailyHealthStore: NSObject, ObservableObject {
     
     private let persistence: Persistence
     private let context: NSManagedObjectContext
+    private let backgroundContext: NSManagedObjectContext
+    private let writeQueue = DispatchQueue(label: "com.mneme.dailyhealthstore.write", qos: .userInitiated)
     
     init(persistence: Persistence = PersistenceController.shared) {
         self.persistence = persistence
         self.context = persistence.viewContext
+        self.backgroundContext = persistence.newBackgroundContext()
         super.init()
+        
+        // Merge changes from background context to view context
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(contextDidSave(_:)),
+            name: .NSManagedObjectContextDidSave,
+            object: backgroundContext
+        )
+    }
+    
+    @objc private func contextDidSave(_ notification: Notification) {
+        context.perform {
+            self.context.mergeChanges(fromContextDidSave: notification)
+        }
     }
     
     func getMetric(for date: Date) -> DailyHealthMetric? {
@@ -68,34 +85,50 @@ final class DailyHealthStore: NSObject, ObservableObject {
         let calendar = Calendar.current
         let dayStart = calendar.startOfDay(for: date)
         
-        try? await persistence.performBackgroundTask { context in
-            let request: NSFetchRequest<DailyHealthStat> = DailyHealthStat.fetchRequest()
-            request.predicate = NSPredicate(format: "date == %@", dayStart as CVarArg)
-            request.fetchLimit = 1
-            
-            let stat: DailyHealthStat
-            
-            if let results = try? context.fetch(request), let existing = results.first {
-                stat = existing
-                stat.modifiedAt = Date()
-            } else {
-                stat = DailyHealthStat(context: context)
-                stat.id = UUID()
-                stat.createdAt = Date()
-                stat.modifiedAt = Date()
-                stat.date = dayStart
-            }
-            
-            if let activeEnergy = activeEnergy {
-                stat.activeEnergyBurned = activeEnergy
-            }
-            
-            if let stepCount = stepCount {
-                stat.stepCount = stepCount
-            }
-            
-            if let distance = distance {
-                stat.distanceWalkingRunning = distance
+        // Use serial queue to prevent race conditions
+        await withCheckedContinuation { continuation in
+            writeQueue.async { [weak self] in
+                guard let self = self else {
+                    continuation.resume()
+                    return
+                }
+                
+                self.backgroundContext.performAndWait {
+                    let request: NSFetchRequest<DailyHealthStat> = DailyHealthStat.fetchRequest()
+                    request.predicate = NSPredicate(format: "date == %@", dayStart as CVarArg)
+                    request.fetchLimit = 1
+                    
+                    let stat: DailyHealthStat
+                    
+                    if let results = try? self.backgroundContext.fetch(request), let existing = results.first {
+                        stat = existing
+                        stat.modifiedAt = Date()
+                    } else {
+                        stat = DailyHealthStat(context: self.backgroundContext)
+                        stat.id = UUID()
+                        stat.createdAt = Date()
+                        stat.modifiedAt = Date()
+                        stat.date = dayStart
+                    }
+                    
+                    if let activeEnergy = activeEnergy {
+                        stat.activeEnergyBurned = activeEnergy
+                    }
+                    
+                    if let stepCount = stepCount {
+                        stat.stepCount = stepCount
+                    }
+                    
+                    if let distance = distance {
+                        stat.distanceWalkingRunning = distance
+                    }
+                    
+                    if self.backgroundContext.hasChanges {
+                        try? self.backgroundContext.save()
+                    }
+                }
+                
+                continuation.resume()
             }
         }
     }
