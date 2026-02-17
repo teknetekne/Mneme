@@ -247,7 +247,7 @@ actor FoundationModelsNLP {
         
         let normalized = trimmed.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current).lowercased()
         let (variable, intentValue) = await MainActor.run { () -> (VariableStruct?, String) in
-            let vars = VariableStore.getVariablesSnapshot()
+            let vars = VariableStore.shared.variables
             if let foundVar = vars.first(where: {
                 $0.name.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current).lowercased() == normalized
             }) {

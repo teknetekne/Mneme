@@ -93,6 +93,7 @@ final class PersistenceController: Persistence {
                 do {
                     try await LegacyStoreMigrator.importDump(dump, into: container)
                 } catch {
+                    print("Legacy migration failed: \(error)")
                 }
             }
         }

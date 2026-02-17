@@ -208,7 +208,8 @@ final class ActivityCalorieService {
             let birthdayComponents = try healthStore.dateOfBirthComponents()
             let calendar = Calendar.current
             let now = Date()
-            let age = calendar.dateComponents([.year], from: birthdayComponents.date!, to: now).year ?? 30
+            guard let birthday = birthdayComponents.date else { return 30 }
+            let age = calendar.dateComponents([.year], from: birthday, to: now).year ?? 30
             return age
         } catch {
             return 30

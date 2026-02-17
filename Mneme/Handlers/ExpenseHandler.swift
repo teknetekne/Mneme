@@ -3,7 +3,6 @@ import Foundation
 /// Handler for expense and income intents
 /// Handles amount validation, currency detection, variable lookup, and async currency conversion
 final class ExpenseHandler: IntentHandler {
-    private let confidenceThreshold: Double = 0.6
     private let currencyService = CurrencyService.shared
     private let currencySettingsStore = CurrencySettingsStore.shared
     private let variableHandler = VariableHandler.shared
@@ -42,7 +41,7 @@ final class ExpenseHandler: IntentHandler {
         // 3. Add currency
         if let currency = result.currency, !currency.value.isEmpty {
             let confidence = currency.confidence
-            let isConfident = !shouldMarkAsInvalid(confidence: confidence)
+            let isConfident = !NotepadValidator.shouldMarkAsInvalid(confidence: confidence)
             let isValid = NotepadValidator.isValidCurrency(currency.value) && isConfident
             items.append(ParsingResultItem(
                 field: "Currency",
@@ -90,7 +89,7 @@ final class ExpenseHandler: IntentHandler {
         currency: String?
     ) async -> ParsingResultItem {
         let confidence = amount.confidence
-        let isConfident = !shouldMarkAsInvalid(confidence: confidence)
+        let isConfident = !NotepadValidator.shouldMarkAsInvalid(confidence: confidence)
         let isValid = NotepadValidator.isValidAmount(amount.value) && isConfident
         
         // Determine sign based on intent
@@ -165,8 +164,4 @@ final class ExpenseHandler: IntentHandler {
         }
     }
     
-    private func shouldMarkAsInvalid(confidence: Double?) -> Bool {
-        guard let confidence = confidence else { return false }
-        return confidence < confidenceThreshold
-    }
 }

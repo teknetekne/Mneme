@@ -59,9 +59,10 @@ struct NotepadValidator {
         // Can be negative/positive
         return amount != 0
     }
+
+    static func shouldMarkAsInvalid(confidence: Double?, threshold: Double = 0.6) -> Bool {
+        guard let confidence = confidence else { return false }
+        return confidence < threshold
+    }
 }
-
-
-
-
 

@@ -1,67 +1,66 @@
 import Foundation
 import CoreData
 
-enum MigrationStatus {
-    case notStarted
-    case inProgress
-    case completed
-    case failed(Error)
-}
-
 final class DataMigrationService {
     static let shared = DataMigrationService()
-    
+
     private let migrationVersionKey = "mneme_coredata_migration_version"
     private let currentMigrationVersion = 1
-    
+
+    // Guard against concurrent migration calls
+    private var migrationTask: Task<Void, Error>?
+
     private init() {}
-    
-    var migrationVersion: Int {
+
+    private var migrationVersion: Int {
         UserDefaults.standard.integer(forKey: migrationVersionKey)
     }
-    
+
     var needsMigration: Bool {
         migrationVersion < currentMigrationVersion
     }
     
-    var migrationStatus: MigrationStatus {
-        if !needsMigration {
-            return .completed
-        }
-        if UserDefaults.standard.bool(forKey: "mneme_migration_in_progress") {
-            return .inProgress
-        }
-        if let errorData = UserDefaults.standard.data(forKey: "mneme_migration_error"),
-           let error = try? NSKeyedUnarchiver.unarchivedObject(ofClass: NSError.self, from: errorData) {
-            return .failed(error)
-        }
-        return .notStarted
-    }
-    
     func performMigration() async throws {
         guard needsMigration else { return }
-        
-        UserDefaults.standard.set(true, forKey: "mneme_migration_in_progress")
-        UserDefaults.standard.removeObject(forKey: "mneme_migration_error")
-        
-        do {
-            let persistence: Persistence = PersistenceController.shared
-            try await persistence.performBackgroundTask { context in
-                try self.migrateNotepadEntries(context: context)
-                try self.migrateWorkSessions(context: context)
-                try self.migrateVariables(context: context)
-                try self.migrateReminderEventTags(context: context)
-                try self.migrateCurrencySettings(context: context)
-                try self.migrateUserSettings(context: context)
-                return ()
+
+        // If a migration is already in progress, await that task instead of starting a new one
+        if let existingTask = migrationTask {
+            try await existingTask.value
+            return
+        }
+
+        let task = Task<Void, Error> {
+            UserDefaults.standard.set(true, forKey: "mneme_migration_in_progress")
+            UserDefaults.standard.removeObject(forKey: "mneme_migration_error")
+
+            do {
+                let persistence: Persistence = PersistenceController.shared
+                try await persistence.performBackgroundTask { context in
+                    try self.migrateNotepadEntries(context: context)
+                    try self.migrateWorkSessions(context: context)
+                    try self.migrateVariables(context: context)
+                    try self.migrateReminderEventTags(context: context)
+                    try self.migrateCurrencySettings(context: context)
+                    try self.migrateUserSettings(context: context)
+                    return ()
+                }
+
+                UserDefaults.standard.set(self.currentMigrationVersion, forKey: self.migrationVersionKey)
+                UserDefaults.standard.set(false, forKey: "mneme_migration_in_progress")
+            } catch {
+                let errorData = try? NSKeyedArchiver.archivedData(withRootObject: error as NSError, requiringSecureCoding: false)
+                UserDefaults.standard.set(errorData, forKey: "mneme_migration_error")
+                UserDefaults.standard.set(false, forKey: "mneme_migration_in_progress")
+                throw error
             }
-            
-            UserDefaults.standard.set(currentMigrationVersion, forKey: migrationVersionKey)
-            UserDefaults.standard.set(false, forKey: "mneme_migration_in_progress")
+        }
+        migrationTask = task
+
+        do {
+            try await task.value
+            migrationTask = nil
         } catch {
-            let errorData = try? NSKeyedArchiver.archivedData(withRootObject: error as NSError, requiringSecureCoding: false)
-            UserDefaults.standard.set(errorData, forKey: "mneme_migration_error")
-            UserDefaults.standard.set(false, forKey: "mneme_migration_in_progress")
+            migrationTask = nil
             throw error
         }
     }
@@ -103,7 +102,7 @@ final class DataMigrationService {
             return
         }
         
-        let deviceId = getOrCreateDeviceId()
+        let deviceId = DeviceIdHelper.getOrCreateDeviceId()
         let now = Date()
         
         for entry in entries {
@@ -152,7 +151,7 @@ final class DataMigrationService {
             return
         }
         
-        let deviceId = getOrCreateDeviceId()
+        let deviceId = DeviceIdHelper.getOrCreateDeviceId()
         let now = Date()
         
         for session in sessions {
@@ -319,20 +318,4 @@ final class DataMigrationService {
         profile.modifiedAt = Date()
     }
     
-    private func getOrCreateDeviceId() -> UUID {
-        let key = "mneme_device_id"
-        if let uuidString = UserDefaults.standard.string(forKey: key),
-           let uuid = UUID(uuidString: uuidString) {
-            return uuid
-        }
-        let uuid = UUID()
-        UserDefaults.standard.set(uuid.uuidString, forKey: key)
-        return uuid
-    }
-    
-    func resetMigration() {
-        UserDefaults.standard.removeObject(forKey: migrationVersionKey)
-        UserDefaults.standard.removeObject(forKey: "mneme_migration_in_progress")
-        UserDefaults.standard.removeObject(forKey: "mneme_migration_error")
-    }
 }

@@ -49,19 +49,15 @@ final class NotepadViewModel: ObservableObject {
         case success
         case error
     }
+
+    private var snackbarDismissTask: Task<Void, Never>?
     
     // MARK: - Parsing (from old code)
     
     private var debounceTasks: [UUID: Task<Void, Never>] = [:]
     
-    private let confidenceThreshold: Double = 0.6
     private let typingThrottleNanoseconds: UInt64 = 300_000_000
     private let minParseLength = 3
-    
-    private func shouldMarkAsInvalid(confidence: Double?) -> Bool {
-        guard let confidence = confidence else { return false }
-        return confidence < confidenceThreshold
-    }
     
     // MARK: - Debounced Parsing
     
@@ -102,8 +98,16 @@ final class NotepadViewModel: ObservableObject {
             if expressionResult.field == "Calories" {
                 intent = "meal"
             } else {
-                // For money: check sign in the result value
-                intent = expressionResult.value.contains("-") ? "expense" : "income"
+                // For money: parse the numeric value to determine sign
+                let cleanedValue = expressionResult.value
+                    .replacingOccurrences(of: ",", with: "")
+                    .components(separatedBy: CharacterSet.letters.union(.whitespaces)).joined()
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                if let numericValue = Double(cleanedValue), numericValue < 0 {
+                    intent = "expense"
+                } else {
+                    intent = "income"
+                }
             }
             
             items.append(ParsingResultItem(
@@ -518,10 +522,6 @@ final class NotepadViewModel: ObservableObject {
     
     // MARK: - Location Operations (Delegated to LocationManager)
     
-    func setLocation(for lineId: UUID, name: String) {
-        locationManager.setLocation(for: lineId, locationName: name)
-    }
-    
     func setLocation(for lineId: UUID, locationName: String) {
         locationManager.setLocation(for: lineId, locationName: locationName)
     }
@@ -733,24 +733,30 @@ final class NotepadViewModel: ObservableObject {
         snackbarTitle = title
         snackbarType = .success
         showSnackbar = true
-        
-        // Auto-dismiss after 2.5 seconds
-        Task { @MainActor in
+
+        // Cancel previous dismiss task and start new one
+        snackbarDismissTask?.cancel()
+        snackbarDismissTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 2_500_000_000)
-            showSnackbar = false
+            if !Task.isCancelled {
+                showSnackbar = false
+            }
         }
     }
-    
+
     func showError(_ message: String, title: String = "Error") {
         snackbarMessage = message
         snackbarTitle = title
         snackbarType = .error
         showSnackbar = true
-        
-        // Auto-dismiss after 3 seconds for errors
-        Task { @MainActor in
+
+        // Cancel previous dismiss task and start new one
+        snackbarDismissTask?.cancel()
+        snackbarDismissTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 3_000_000_000)
-            showSnackbar = false
+            if !Task.isCancelled {
+                showSnackbar = false
+            }
         }
     }
     
@@ -768,13 +774,6 @@ final class NotepadViewModel: ObservableObject {
             _ = await NLPService.shared.parse(text: "warmup")
         }
     }
-    
-    func cancelParsing(for lineId: UUID) {
-        debounceTasks[lineId]?.cancel()
-        debounceTasks.removeValue(forKey: lineId)
-    }
-    
-
     
     func processLines() async {
         // Process all non-empty lines

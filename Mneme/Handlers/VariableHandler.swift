@@ -1,10 +1,11 @@
 import Foundation
 
+@MainActor
 final class VariableHandler {
     private let variableStore = VariableStore.shared
-    
+
     static let shared = VariableHandler()
-    
+
     private init() {}
     
     func findVariable(
@@ -32,56 +33,6 @@ final class VariableHandler {
         }
     }
     
-    func handleMealVariable(
-        mealName: String,
-        quantity: Double
-    ) -> [ParsingResultItem]? {
-        guard let variable = findVariable(for: mealName, type: .meal, intent: "meal") else {
-            return nil
-        }
-        
-        // Use stored calories and grams if available
-        if let storedCalories = variable.calories {
-            let totalCalories: Double
-            
-            if let storedGrams = variable.grams, storedGrams > 0 {
-                // Scaling logic: (InputGrams / StoredGrams) * StoredCalories
-                // But wait, 'quantity' here is usually a multiplier (e.g. 2 pizzas) or grams if extracted elsewhere.
-                // In MealHandler, 'quantity' passed here is usually the multiplier (qty).
-                // If the user typed "200g pizza", MealHandler might pass quantity=200 if it thinks it's a number,
-                // OR it might pass nil and handle grams separately.
-                // Let's look at MealHandler usage.
-                // MealHandler calls: variableHandler.handleMealVariable(mealName: mealName, quantity: qty)
-                // where qty is Double(quantity ?? "1") ?? 1.0.
-                // So 'quantity' is the multiplier.
-                
-                // If the user wants to specify grams for a variable (e.g. "200g pizza"),
-                // MealHandler should handle that.
-                // Currently MealHandler calculates 'grams' separately.
-                // We should probably update handleMealVariable to accept 'grams' as well.
-                
-                totalCalories = storedCalories * quantity
-            } else {
-                // Simple multiplier
-                totalCalories = storedCalories * quantity
-            }
-            
-            return [
-                ParsingResultItem(
-                    field: "Calories",
-                    value: String(format: "%.0f kcal", totalCalories),
-                    isValid: true,
-                    errorMessage: nil,
-                    rawValue: nil,
-                    confidence: nil
-                )
-            ]
-        }
-        
-        return nil
-    }
-    
-    // New method to handle grams input for variables
     func handleMealVariable(
         mealName: String,
         quantity: Double, // Multiplier

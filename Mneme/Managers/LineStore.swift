@@ -198,12 +198,6 @@ final class LineStore: ObservableObject {
         }
     }
     
-    func focusFirstIfNeeded() {
-        if focusedId == nil {
-            focusedId = lineOrder.first
-        }
-    }
-    
     // MARK: - Mutation Helpers
     
     /// Add a new empty line after given id (or append at end)
@@ -391,9 +385,10 @@ final class LineStore: ObservableObject {
             let data = try JSONEncoder().encode(linesToSave)
             try data.write(to: fileURL)
         } catch {
+            print("LineStore save error: \(error)")
         }
     }
-    
+
     private func scheduleSave() {
         saveTask?.cancel()
         saveTask = Task { @MainActor in

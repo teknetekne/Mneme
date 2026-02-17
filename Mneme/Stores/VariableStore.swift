@@ -182,24 +182,9 @@ final class VariableStore: NSObject, ObservableObject {
         }
     }
     
-    func getVariable(name: String) -> VariableStruct? {
-        return variables.first { $0.name.lowercased() == name.lowercased() }
-    }
-    
-    func getVariables(for intent: String) -> [VariableStruct] {
-        return variables.filter { $0.type.intent == intent }
-    }
-    
-    nonisolated static func getVariablesSnapshot() -> [VariableStruct] {
-        if Thread.isMainThread {
-            return MainActor.assumeIsolated {
-                return VariableStore.shared.variables
-            }
-        } else {
-            return DispatchQueue.main.sync {
-                return VariableStore.shared.variables
-            }
-        }
+    @MainActor
+    static func getVariablesSnapshot() -> [VariableStruct] {
+        return VariableStore.shared.variables
     }
 }
 

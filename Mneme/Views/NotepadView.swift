@@ -538,20 +538,23 @@ struct NotepadContent: View {
         formatter.dateFormat = "HH:mm"
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = TimeZone.current
-        let currentTime = formatter.string(from: Date())
-        
+        let now = Date()
+        let currentTime = formatter.string(from: now)
+
         let projectName = newWorkProjectName.trimmingCharacters(in: .whitespacesAndNewlines)
         let object = projectName.isEmpty ? nil : projectName
-        
-        let result = workSessionStore.recordWorkStart(date: Date(), time: currentTime, object: object)
-        switch result {
-        case .success:
-            viewModel.showSnack("Work started at \(currentTime)" + (object != nil ? " - \(object!)" : ""))
-            newWorkProjectName = ""
-        case .needsConfirmation(let existingSession):
-            viewModel.pendingWorkStart = (date: Date(), time: currentTime, object: object)
-            viewModel.existingWorkSession = existingSession
-            viewModel.showWorkSessionConfirmation = true
+
+        Task {
+            let result = await workSessionStore.recordWorkStart(date: now, time: currentTime, object: object)
+            switch result {
+            case .success:
+                viewModel.showSnack("Work started at \(currentTime)" + (object != nil ? " - \(object!)" : ""))
+                newWorkProjectName = ""
+            case .needsConfirmation(let existingSession):
+                viewModel.pendingWorkStart = (date: now, time: currentTime, object: object)
+                viewModel.existingWorkSession = existingSession
+                viewModel.showWorkSessionConfirmation = true
+            }
         }
     }
     
@@ -560,16 +563,16 @@ struct NotepadContent: View {
             viewModel.showSnack("No active work session found")
             return
         }
-        
+
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:mm"
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = TimeZone.current
         let currentTime = formatter.string(from: Date())
-        
+
         let calendar = Calendar.current
         let sessionDate = calendar.startOfDay(for: activeSession.date)
-        
+
         let components = currentTime.split(separator: ":")
         guard components.count == 2,
               let hour = Int(components[0]),
@@ -577,21 +580,23 @@ struct NotepadContent: View {
             viewModel.showSnack("Invalid time format")
             return
         }
-        
+
         guard let date = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: sessionDate) else {
             viewModel.showSnack("Invalid date")
             return
         }
-        
-        if let session = workSessionStore.recordWorkEnd(date: date, time: currentTime, object: activeSession.object),
-           let duration = session.durationMinutes {
-            let hours = duration / 60
-            let minutes = duration % 60
-            let durationText = hours > 0 ? "\(hours)h \(minutes)m" : "\(minutes)m"
-            let objectText = session.object != nil ? " (\(session.object!))" : ""
-            viewModel.showSnack("Work ended. Duration: \(durationText)\(objectText)")
-        } else {
-            viewModel.showSnack("Failed to end work session")
+
+        Task {
+            if let session = await workSessionStore.recordWorkEnd(date: date, time: currentTime, object: activeSession.object),
+               let duration = session.durationMinutes {
+                let hours = duration / 60
+                let minutes = duration % 60
+                let durationText = hours > 0 ? "\(hours)h \(minutes)m" : "\(minutes)m"
+                let objectText = session.object != nil ? " (\(session.object!))" : ""
+                viewModel.showSnack("Work ended. Duration: \(durationText)\(objectText)")
+            } else {
+                viewModel.showSnack("Failed to end work session")
+            }
         }
     }
     

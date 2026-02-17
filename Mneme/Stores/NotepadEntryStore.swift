@@ -181,7 +181,7 @@ final class NotepadEntryStore: NSObject, ObservableObject {
                 parsedEntry.mealKcal = entry.mealKcal ?? 0
                 parsedEntry.createdAt = entry.date
                 parsedEntry.modifiedAt = Date()
-                parsedEntry.deviceId = self.getOrCreateDeviceId()
+                parsedEntry.deviceId = DeviceIdHelper.getOrCreateDeviceId()
                 return ()
             }
         }
@@ -213,16 +213,6 @@ final class NotepadEntryStore: NSObject, ObservableObject {
         return String(combined.prefix(maxLength)) + "..."
     }
     
-    private func getOrCreateDeviceId() -> UUID {
-        let key = "mneme_device_id"
-        if let uuidString = UserDefaults.standard.string(forKey: key),
-           let uuid = UUID(uuidString: uuidString) {
-            return uuid
-        }
-        let uuid = UUID()
-        UserDefaults.standard.set(uuid.uuidString, forKey: key)
-        return uuid
-    }
 }
 
 extension NotepadEntryStore: NSFetchedResultsControllerDelegate {

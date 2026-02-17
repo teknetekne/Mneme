@@ -131,7 +131,16 @@ struct ManageEntriesView: View {
             if expressionResult.field == "Calories" {
                 intent = "meal"
             } else {
-                intent = expressionResult.value.contains("-") ? "expense" : "income"
+                // Parse the numeric value to determine sign
+                let cleanedValue = expressionResult.value
+                    .replacingOccurrences(of: ",", with: "")
+                    .components(separatedBy: CharacterSet.letters.union(.whitespaces)).joined()
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                if let numericValue = Double(cleanedValue), numericValue < 0 {
+                    intent = "expense"
+                } else {
+                    intent = "income"
+                }
             }
             
             // Construct result manually from expression

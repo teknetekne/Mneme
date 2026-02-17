@@ -58,7 +58,7 @@ final class WorkSessionManager: ObservableObject {
         
         // End existing session
         if let existing = existingWorkSession {
-            _ = workSessionStore.recordWorkEnd(date: pending.date, time: pending.time, object: existing.object)
+            _ = await workSessionStore.recordWorkEnd(date: pending.date, time: pending.time, object: existing.object)
         }
         
         // Start new session
@@ -101,14 +101,14 @@ final class WorkSessionManager: ObservableObject {
         let minute = calendar.component(.minute, from: endDate)
         let timeString = String(format: "%02d:%02d", hour, minute)
         
-        _ = workSessionStore.recordWorkEnd(date: endDate, time: timeString, object: activeSession.object)
+        _ = await workSessionStore.recordWorkEnd(date: endDate, time: timeString, object: activeSession.object)
     }
     
     // MARK: - Private Helpers
     
     /// Start a new work session
     private func startNewSession(date: Date, time: String, object: String?) async throws {
-        _ = workSessionStore.recordWorkStart(date: date, time: time, object: object)
+        _ = await workSessionStore.recordWorkStart(date: date, time: time, object: object)
     }
     
     // MARK: - Queries

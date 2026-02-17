@@ -3,7 +3,6 @@ import Foundation
 /// Handler for event and reminder intents
 /// Handles time/day validation and subject extraction
 final class EventHandler: IntentHandler {
-    private let confidenceThreshold: Double = 0.6
     
     func handle(
         result: ParsedResult,
@@ -162,7 +161,7 @@ final class EventHandler: IntentHandler {
         fieldName: String
     ) -> ParsingResultItem {
         let confidence = time.confidence
-        let isConfident = !shouldMarkAsInvalid(confidence: confidence)
+        let isConfident = !NotepadValidator.shouldMarkAsInvalid(confidence: confidence)
         let isValid = NotepadValidator.isValidTime(time.value) && isConfident
         let displayTime = NotepadFormatter.formatTimeForDisplay(time.value)
         
@@ -181,7 +180,7 @@ final class EventHandler: IntentHandler {
         fieldName: String
     ) -> ParsingResultItem {
         let confidence = day.confidence
-        let isConfident = !shouldMarkAsInvalid(confidence: confidence)
+        let isConfident = !NotepadValidator.shouldMarkAsInvalid(confidence: confidence)
         let isValid = NotepadValidator.isValidDate(day.value) && isConfident
         let displayDay = NotepadFormatter.formatDayForDisplay(day.value)
         
@@ -195,8 +194,4 @@ final class EventHandler: IntentHandler {
         )
     }
     
-    private func shouldMarkAsInvalid(confidence: Double?) -> Bool {
-        guard let confidence = confidence else { return false }
-        return confidence < confidenceThreshold
-    }
 }
