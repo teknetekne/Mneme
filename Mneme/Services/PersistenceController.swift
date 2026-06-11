@@ -13,7 +13,7 @@ protocol Persistence {
 
 /// CloudKit-mirrored Core Data stack used in production.
 final class PersistenceController: Persistence {
-    static let shared = PersistenceController()
+    nonisolated static let shared = PersistenceController()
 
     let container: NSPersistentCloudKitContainer
 
@@ -36,6 +36,8 @@ final class PersistenceController: Persistence {
         // History + remote change notifications for live updates
         description.setOption(true as NSNumber, forKey: NSPersistentHistoryTrackingKey)
         description.setOption(true as NSNumber, forKey: NSPersistentStoreRemoteChangeNotificationPostOptionKey)
+        description.shouldMigrateStoreAutomatically = true
+        description.shouldInferMappingModelAutomatically = true
 
         // CloudKit mirroring (enable only when available)
         let cloudIdentifier = Bundle.main.object(forInfoDictionaryKey: "iCloudContainerIdentifier") as? String
@@ -153,6 +155,8 @@ final class InMemoryPersistence: Persistence {
             }
         }
         container.viewContext.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
+        container.viewContext.automaticallyMergesChangesFromParent = true
+        container.viewContext.undoManager = nil
     }
 
     var viewContext: NSManagedObjectContext { container.viewContext }
@@ -160,6 +164,7 @@ final class InMemoryPersistence: Persistence {
     func newBackgroundContext() -> NSManagedObjectContext {
         let ctx = container.newBackgroundContext()
         ctx.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
+        ctx.automaticallyMergesChangesFromParent = true
         return ctx
     }
 

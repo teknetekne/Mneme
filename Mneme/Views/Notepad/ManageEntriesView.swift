@@ -45,7 +45,9 @@ struct ManageEntriesView: View {
                             .padding(.vertical, 4)
                             .swipeActions(edge: .trailing) {
                                 Button(role: .destructive) {
-                                    store.deleteEntry(entry)
+                                    Task {
+                                        try? await store.deleteEntry(entry)
+                                    }
                                 } label: {
                                     Label("Delete", systemImage: "trash")
                                 }
@@ -181,9 +183,10 @@ struct ManageEntriesView: View {
             date: oldEntry.date // Keep original date!
         )
         
-        await MainActor.run {
-            store.deleteEntry(oldEntry)
-            store.addEntry(newEntry)
+        do {
+            try await store.deleteEntry(oldEntry)
+            try await store.addEntry(newEntry)
+        } catch {
         }
     }
 }

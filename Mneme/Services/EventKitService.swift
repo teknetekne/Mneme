@@ -2,6 +2,33 @@ import Foundation
 import EventKit
 import Combine
 
+struct CreatedCalendarItem<Item> {
+    let item: Item
+    let identifier: String
+}
+
+protocol EventKitServicing {
+    func createEventRecord(
+        title: String,
+        startDate: Date,
+        endDate: Date,
+        notes: String?,
+        location: String?,
+        url: URL?,
+        calendar: EKCalendar?
+    ) async throws -> CreatedCalendarItem<EKEvent>
+
+    func createReminderRecord(
+        title: String,
+        dueDate: Date?,
+        notes: String?,
+        locationName: String?,
+        url: URL?,
+        priority: Int,
+        calendar: EKCalendar?
+    ) async throws -> CreatedCalendarItem<EKReminder>
+}
+
 final class EventKitService: ObservableObject {
     static let shared = EventKitService()
     
@@ -223,13 +250,72 @@ final class EventKitService: ObservableObject {
     }
 }
 
+extension EventKitService: EventKitServicing {
+    func createEventRecord(
+        title: String,
+        startDate: Date,
+        endDate: Date,
+        notes: String?,
+        location: String? = nil,
+        url: URL? = nil,
+        calendar: EKCalendar? = nil
+    ) async throws -> CreatedCalendarItem<EKEvent> {
+        let event = try await createEvent(
+            title: title,
+            startDate: startDate,
+            endDate: endDate,
+            notes: notes,
+            location: location,
+            url: url,
+            calendar: calendar
+        )
+
+        let identifier = event.calendarItemIdentifier
+        guard !identifier.isEmpty else {
+            throw EventKitError.missingIdentifier
+        }
+
+        return CreatedCalendarItem(item: event, identifier: identifier)
+    }
+
+    func createReminderRecord(
+        title: String,
+        dueDate: Date?,
+        notes: String? = nil,
+        locationName: String? = nil,
+        url: URL? = nil,
+        priority: Int = 0,
+        calendar: EKCalendar? = nil
+    ) async throws -> CreatedCalendarItem<EKReminder> {
+        let reminder = try await createReminder(
+            title: title,
+            dueDate: dueDate,
+            notes: notes,
+            locationName: locationName,
+            url: url,
+            priority: priority,
+            calendar: calendar
+        )
+
+        let identifier = reminder.calendarItemIdentifier
+        guard !identifier.isEmpty else {
+            throw EventKitError.missingIdentifier
+        }
+
+        return CreatedCalendarItem(item: reminder, identifier: identifier)
+    }
+}
+
 enum EventKitError: LocalizedError {
     case notAuthorized
+    case missingIdentifier
     
     var errorDescription: String? {
         switch self {
         case .notAuthorized:
             return "EventKit access not authorized"
+        case .missingIdentifier:
+            return "Calendar item identifier was unavailable after save"
         }
     }
 }

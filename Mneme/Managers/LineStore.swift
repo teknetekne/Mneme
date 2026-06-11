@@ -24,19 +24,6 @@ final class LineStore: ObservableObject {
         lineOrder.compactMap { linesById[$0] }.filter { $0.isActive }
     }
     
-    // MARK: - Persistence Properties
-    
-    private let saveDebounceInterval: TimeInterval = 1.0
-    private var saveTask: Task<Void, Never>?
-    
-    // Static flag to track if this is the first load of the app session
-    private static var hasSessionStarted = false
-    
-    private var fileURL: URL {
-        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        return documents.appendingPathComponent("notepad_data.json")
-    }
-    
     // MARK: - Initialization
     
     init(initialLines: [LineViewModel]? = nil) {
@@ -46,30 +33,10 @@ final class LineStore: ObservableObject {
                 lineOrder.append(line.id)
             }
         } else {
-            let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-            let url = documents.appendingPathComponent("notepad_data.json")
-            
-            // Clear data on fresh launch
-            if !Self.hasSessionStarted {
-                try? FileManager.default.removeItem(at: url)
-                Self.hasSessionStarted = true
-            }
-            
-            // Try to load from disk first
-            if let data = try? Data(contentsOf: url),
-               let lines = try? JSONDecoder().decode([LineViewModel].self, from: data),
-               !lines.isEmpty {
-                for line in lines {
-                    linesById[line.id] = line
-                    lineOrder.append(line.id)
-                }
-            } else {
-                // Fallback to default empty line
-                for _ in 0..<50 {
-                    let passiveLine = LineViewModel(text: "", isActive: false)
-                    linesById[passiveLine.id] = passiveLine
-                    lineOrder.append(passiveLine.id)
-                }
+            for _ in 0..<50 {
+                let passiveLine = LineViewModel(text: "", isActive: false)
+                linesById[passiveLine.id] = passiveLine
+                lineOrder.append(passiveLine.id)
             }
         }
         
@@ -95,7 +62,6 @@ final class LineStore: ObservableObject {
         // This is the key to performance: only the specific LineRowView re-renders.
         if line.text != newText {
             line.text = newText
-            scheduleSave()
         }
     }
     
@@ -104,7 +70,6 @@ final class LineStore: ObservableObject {
         if line.status != status {
             objectWillChange.send()
             line.status = status
-            scheduleSave()
         }
     }
     
@@ -138,7 +103,6 @@ final class LineStore: ObservableObject {
         nextLine.status = .idle
         
         focusedId = nextId
-        save()
         return nextId
     }
 
@@ -178,7 +142,6 @@ final class LineStore: ObservableObject {
         line.status = .idle
         
         focusedId = focusId
-        save()
         return focusId
     }
     
@@ -227,7 +190,6 @@ final class LineStore: ObservableObject {
         focusedId = newLine.id
         
         ensureAtLeastOneLine()
-        save()
         return newLine.id
     }
     
@@ -242,7 +204,6 @@ final class LineStore: ObservableObject {
             linesById = [emptyLine.id: emptyLine]
             lineOrder = [emptyLine.id]
             focusedId = emptyLine.id
-            save()
             return emptyLine.id
         }
         
@@ -264,7 +225,6 @@ final class LineStore: ObservableObject {
         }
         
         ensureAtLeastOneLine()
-        save()
         return focusedId
     }
     
@@ -291,7 +251,6 @@ final class LineStore: ObservableObject {
         focusedId = prevLineId
         
         ensureAtLeastOneLine()
-        save()
         return prevLineId
     }
     
@@ -338,7 +297,6 @@ final class LineStore: ObservableObject {
         let focusTarget = newIds.first ?? id
         focusedId = focusTarget
         ensureAtLeastOneLine()
-        save()
         return (focus: focusTarget, newLines: newIds)
     }
     
@@ -350,7 +308,6 @@ final class LineStore: ObservableObject {
             linesById = [new.id: new]
             lineOrder = [new.id]
             focusedId = new.id
-            save()
         }
     }
     
@@ -372,30 +329,6 @@ final class LineStore: ObservableObject {
         
         if let firstId = lineOrder.first {
             focusedId = firstId
-        }
-        
-        save()
-    }
-    
-    // MARK: - Persistence
-    
-    private func save() {
-        let linesToSave = lineOrder.compactMap { linesById[$0] }
-        do {
-            let data = try JSONEncoder().encode(linesToSave)
-            try data.write(to: fileURL)
-        } catch {
-            print("LineStore save error: \(error)")
-        }
-    }
-
-    private func scheduleSave() {
-        saveTask?.cancel()
-        saveTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: UInt64(saveDebounceInterval * 1_000_000_000))
-            if !Task.isCancelled {
-                self.save()
-            }
         }
     }
 }

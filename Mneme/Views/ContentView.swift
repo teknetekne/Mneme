@@ -85,6 +85,7 @@ struct ContentView: View {
             .interactiveDismissDisabled()
         }
         .onAppear {
+            guard !AppLaunchConfiguration.skipOnboarding else { return }
             if !hasShownTutorial {
                 showTutorial = true
             } else if !hasShownPermissionsOnboarding {

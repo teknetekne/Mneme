@@ -8,19 +8,24 @@ import Combine
 /// Responsibility: Calendar and Reminder creation from parsed results
 @MainActor
 final class EventKitManager: ObservableObject {
+    struct CalendarItemCreationResult<Item> {
+        let item: Item
+        let identifier: String
+        let tagSyncError: Error?
+    }
     
     // MARK: - Dependencies
     
-    private let eventKitService: EventKitService
+    private let eventKitService: EventKitServicing
     private let tagManager: TagManager
     
     // MARK: - Initialization
     
     init(
-        eventKitService: EventKitService? = nil,
+        eventKitService: EventKitServicing,
         tagManager: TagManager
     ) {
-        self.eventKitService = eventKitService ?? .shared
+        self.eventKitService = eventKitService
         self.tagManager = tagManager
     }
     
@@ -33,7 +38,7 @@ final class EventKitManager: ObservableObject {
     ///   - lineId: UUID of the line
     ///   - location: Optional location name
     ///   - url: Optional URL
-    /// - Returns: Created EKReminder
+    /// - Returns: Created reminder and tag sync status
     @discardableResult
     func createReminder(
         from result: ParsedResult,
@@ -41,7 +46,7 @@ final class EventKitManager: ObservableObject {
         lineId: UUID,
         location: String? = nil,
         url: URL? = nil
-    ) async throws -> EKReminder {
+    ) async throws -> CalendarItemCreationResult<EKReminder> {
         // Extract details - use reminderDay and reminderTime for reminders
         let title = result.object?.value ?? originalText
         let day = result.reminderDay?.value
@@ -51,15 +56,29 @@ final class EventKitManager: ObservableObject {
         let formattedTitle = formatTitle(title)
         
         // Create reminder via EventKitService
-        let reminder = try await eventKitService.createReminder(
+        let reminder = try await eventKitService.createReminderRecord(
             title: formattedTitle,
             dueDate: parseDate(day: day, time: time),
             notes: nil,
             locationName: location,
-            url: url
+            url: url,
+            priority: 0,
+            calendar: nil
         )
-        
-        return reminder
+
+        let tagSyncError: Error?
+        do {
+            try await tagManager.commitTags(from: lineId, toReminderIdentifier: reminder.identifier)
+            tagSyncError = nil
+        } catch {
+            tagSyncError = error
+        }
+
+        return CalendarItemCreationResult(
+            item: reminder.item,
+            identifier: reminder.identifier,
+            tagSyncError: tagSyncError
+        )
     }
     
     // MARK: - Event Operations
@@ -71,7 +90,7 @@ final class EventKitManager: ObservableObject {
     ///   - lineId: UUID of the line
     ///   - location: Optional location name
     ///   - url: Optional URL
-    /// - Returns: Created EKEvent
+    /// - Returns: Created event and tag sync status
     @discardableResult
     func createEvent(
         from result: ParsedResult,
@@ -79,7 +98,7 @@ final class EventKitManager: ObservableObject {
         lineId: UUID,
         location: String? = nil,
         url: URL? = nil
-    ) async throws -> EKEvent {
+    ) async throws -> CalendarItemCreationResult<EKEvent> {
         // Extract details - use eventDay and eventTime for events
         let title = result.object?.value ?? originalText
         let day = result.eventDay?.value
@@ -93,16 +112,29 @@ final class EventKitManager: ObservableObject {
         let endDate = startDate.addingTimeInterval(3600) // 1 hour duration by default
         
         // Create event via EventKitService
-        let event = try await eventKitService.createEvent(
+        let event = try await eventKitService.createEventRecord(
             title: formattedTitle,
             startDate: startDate,
             endDate: endDate,
             notes: nil,
             location: location,
-            url: url
+            url: url,
+            calendar: nil
         )
-        
-        return event
+
+        let tagSyncError: Error?
+        do {
+            try await tagManager.commitTags(from: lineId, toEventIdentifier: event.identifier)
+            tagSyncError = nil
+        } catch {
+            tagSyncError = error
+        }
+
+        return CalendarItemCreationResult(
+            item: event.item,
+            identifier: event.identifier,
+            tagSyncError: tagSyncError
+        )
     }
     
     // MARK: - Private Helpers

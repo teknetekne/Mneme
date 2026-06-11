@@ -91,15 +91,20 @@ struct LegacyStoreMigrator {
             return nil
         }
 
+        let metadata: [String: Any]
         do {
-            let metadata = try NSPersistentStoreCoordinator.metadataForPersistentStore(ofType: NSSQLiteStoreType, at: storeURL, options: nil)
+            metadata = try NSPersistentStoreCoordinator.metadataForPersistentStore(ofType: NSSQLiteStoreType, at: storeURL, options: nil)
             if managedObjectModel.isConfiguration(withName: nil, compatibleWithStoreMetadata: metadata) {
                 return nil
             }
         } catch {
+            return nil
         }
 
-        guard let legacyModel = loadLegacyModel() else {
+        guard
+            let legacyModel = loadLegacyModel(),
+            legacyModel.isConfiguration(withName: nil, compatibleWithStoreMetadata: metadata)
+        else {
             return nil
         }
 

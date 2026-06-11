@@ -1,7 +1,6 @@
 import Foundation
 import SwiftUI
 import Combine
-import EventKit
 
 // MARK: - Notepad ViewModel (Refactored)
 
@@ -22,10 +21,11 @@ final class NotepadViewModel: ObservableObject {
     
     // MARK: - Services
     
-    private let nlpService = NLPService.shared
+    private let nlpService: NLPServicing
+    private let availabilityProvider: LanguageModelAvailabilityProviding
     private let currencyService = CurrencyService.shared
     @ObservedObject var currencySettingsStore = CurrencySettingsStore.shared
-    private let notepadEntryStore = NotepadEntryStore.shared
+    private let notepadEntryStore: NotepadEntryStore
     private let variableStore = VariableStore.shared
     
     // MARK: - Published Properties (UI State)
@@ -44,10 +44,12 @@ final class NotepadViewModel: ObservableObject {
     @Published var snackbarTitle: String = ""
     @Published var showSnackbar: Bool = false
     @Published var snackbarType: SnackbarType = .success
+    @Published private(set) var isNLPSupported: Bool
     
-    enum SnackbarType {
+    enum SnackbarType: Equatable {
         case success
         case error
+        case warning
     }
 
     private var snackbarDismissTask: Task<Void, Never>?
@@ -62,6 +64,12 @@ final class NotepadViewModel: ObservableObject {
     // MARK: - Debounced Parsing
     
     func scheduleDebouncedParse(for id: UUID) {
+        guard isNLPSupported else {
+            lineStore.updateStatus(for: id, status: .idle)
+            lineParsingResults.removeValue(forKey: id)
+            return
+        }
+
         debounceTasks[id]?.cancel()
         
         debounceTasks[id] = Task { @MainActor in
@@ -85,6 +93,12 @@ final class NotepadViewModel: ObservableObject {
     private func parseLine(id: UUID, text: String) async {
         guard lineStore.linesById[id] != nil,
               lineStore.linesById[id]?.text.trimmingCharacters(in: .whitespacesAndNewlines) == text else {
+            return
+        }
+
+        guard isNLPSupported else {
+            lineStore.updateStatus(for: id, status: .idle)
+            lineParsingResults.removeValue(forKey: id)
             return
         }
         
@@ -184,16 +198,24 @@ final class NotepadViewModel: ObservableObject {
         lineStore: LineStore? = nil,
         lineManager: LineManager? = nil,
         tagManager: TagManager? = nil,
-        workSessionManager: WorkSessionManager? = nil
+        eventKitManager: EventKitManager? = nil,
+        workSessionManager: WorkSessionManager? = nil,
+        notepadEntryStore: NotepadEntryStore? = nil,
+        nlpService: NLPServicing = NLPService.shared,
+        availabilityProvider: LanguageModelAvailabilityProviding? = nil
     ) {
         self.lineStore = lineStore ?? LineStore()
         let lm = lineManager ?? LineManager()
         self.lineManager = lm
         self.tagManager = tagManager ?? TagManager()
         self.workSessionManager = workSessionManager ?? WorkSessionManager()
+        self.notepadEntryStore = notepadEntryStore ?? NotepadEntryStore.shared
+        self.nlpService = nlpService
+        let resolvedAvailabilityProvider = availabilityProvider ?? SystemLanguageModelAvailabilityProvider()
+        self.availabilityProvider = resolvedAvailabilityProvider
+        self.isNLPSupported = resolvedAvailabilityProvider.isAvailable
         
-        // Initialize EventKitManager with TagManager
-        self.eventKitManager = EventKitManager(tagManager: self.tagManager)
+        self.eventKitManager = eventKitManager ?? EventKitManager(eventKitService: EventKitService.shared, tagManager: self.tagManager)
         
         // Initialize LocationManager
         self.locationManager = LocationManager()
@@ -228,6 +250,14 @@ final class NotepadViewModel: ObservableObject {
     
     func handleTextChange(for id: UUID, oldValue: String, newValue: String) {
         let newTrimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard isNLPSupported else {
+            debounceTasks[id]?.cancel()
+            debounceTasks.removeValue(forKey: id)
+            lineStore.updateStatus(for: id, status: .idle)
+            lineParsingResults.removeValue(forKey: id)
+            return
+        }
         
         if newTrimmed.isEmpty {
             debounceTasks[id]?.cancel()
@@ -279,6 +309,14 @@ final class NotepadViewModel: ObservableObject {
     }
     
     func validateExistingLines() {
+        guard isNLPSupported else {
+            lineParsingResults.removeAll()
+            for line in lines {
+                lineStore.updateStatus(for: line.id, status: .idle)
+            }
+            return
+        }
+
         // Snapshot the lines to ensure thread safety and stability
         let snapshot = lines.compactMap { line -> (UUID, String)? in
             let text = line.text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -311,6 +349,8 @@ final class NotepadViewModel: ObservableObject {
     // MARK: - Validation
     
     var allLinesParsedSuccessfully: Bool {
+        guard isNLPSupported else { return false }
+
         let nonEmptyLines = lines.filter { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         guard !nonEmptyLines.isEmpty else { return false }
         
@@ -328,6 +368,8 @@ final class NotepadViewModel: ObservableObject {
     // MARK: - Reminder/Event Detection
     
     var reminderEvents: [(id: UUID, type: String, subject: String, displayName: String, day: String?, time: String?, rawDay: String?, rawTime: String?)] {
+        guard isNLPSupported else { return [] }
+
         var events: [(id: UUID, type: String, subject: String, displayName: String, day: String?, time: String?, rawDay: String?, rawTime: String?)] = []
         
         for line in lines where line.status != .error {
@@ -581,7 +623,7 @@ final class NotepadViewModel: ObservableObject {
         let location = locationManager.getLocation(for: lineId)
         let url = locationManager.getURL(for: lineId)
         
-        try await eventKitManager.createReminder(
+        let createdReminder = try await eventKitManager.createReminder(
             from: parsedResult,
             originalText: line.text,
             lineId: lineId,
@@ -589,7 +631,11 @@ final class NotepadViewModel: ObservableObject {
             url: url
         )
         
-        showSuccess("Reminder created successfully")
+        if let tagSyncError = createdReminder.tagSyncError {
+            showWarning("Reminder created, but tags could not be synced: \(tagSyncError.localizedDescription)")
+        } else {
+            showSuccess("Reminder created successfully")
+        }
     }
     
     func createEvent(for lineId: UUID) async throws {
@@ -601,7 +647,7 @@ final class NotepadViewModel: ObservableObject {
         let location = locationManager.getLocation(for: lineId)
         let url = locationManager.getURL(for: lineId)
         
-        try await eventKitManager.createEvent(
+        let createdEvent = try await eventKitManager.createEvent(
             from: parsedResult,
             originalText: line.text,
             lineId: lineId,
@@ -609,7 +655,11 @@ final class NotepadViewModel: ObservableObject {
             url: url
         )
         
-        showSuccess("Event created successfully")
+        if let tagSyncError = createdEvent.tagSyncError {
+            showWarning("Event created, but tags could not be synced: \(tagSyncError.localizedDescription)")
+        } else {
+            showSuccess("Event created successfully")
+        }
     }
     
     // MARK: - Helper Methods
@@ -759,28 +809,52 @@ final class NotepadViewModel: ObservableObject {
             }
         }
     }
+
+    func showWarning(_ message: String, title: String = "Warning") {
+        snackbarMessage = message
+        snackbarTitle = title
+        snackbarType = .warning
+        showSnackbar = true
+
+        snackbarDismissTask?.cancel()
+        snackbarDismissTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            if !Task.isCancelled {
+                showSnackbar = false
+            }
+        }
+    }
     
     func showSnack(_ message: String, title: String = "") {
         snackbarMessage = message
         snackbarTitle = title
+        snackbarType = .success
         showSnackbar = true
     }
     
     // MARK: - Helper Methods for View Compatibility
     
     func warmupServices() {
+        guard isNLPSupported else { return }
+
         // Warmup NLP service
         Task {
-            _ = await NLPService.shared.parse(text: "warmup")
+            _ = await nlpService.parse(text: "warmup")
         }
     }
     
     func processLines() async {
+        guard isNLPSupported else {
+            showWarning("Natural language parsing is unavailable on this device.", title: "Unsupported Device")
+            return
+        }
+
         // Process all non-empty lines
         let nonEmptyLines = lines.filter { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         
         var successCount = 0
         var errorCount = 0
+        var warningMessages: [String] = []
         var succeededLineIds: [UUID] = []
         var failedLineIds: [UUID] = []
         
@@ -801,14 +875,17 @@ final class NotepadViewModel: ObservableObject {
             switch intent {
             case "event":
                 do {
-                    _ = try await eventKitManager.createEvent(
+                    let createdEvent = try await eventKitManager.createEvent(
                         from: parsedResult,
                         originalText: line.text,
                         lineId: line.id,
                         location: locationManager.getLocation(for: line.id),
                         url: locationManager.getURL(for: line.id)
                     )
-                    await MainActor.run { notepadEntryStore.addEntry(entry) }
+                    try await notepadEntryStore.addEntry(entry)
+                    if let tagSyncError = createdEvent.tagSyncError {
+                        warningMessages.append("Created event for \"\(line.text)\", but tags were not synced: \(tagSyncError.localizedDescription)")
+                    }
                     successCount += 1
                     succeededLineIds.append(line.id)
                 } catch {
@@ -820,14 +897,17 @@ final class NotepadViewModel: ObservableObject {
                 
             case "reminder":
                 do {
-                    _ = try await eventKitManager.createReminder(
+                    let createdReminder = try await eventKitManager.createReminder(
                         from: parsedResult,
                         originalText: line.text,
                         lineId: line.id,
                         location: locationManager.getLocation(for: line.id),
                         url: locationManager.getURL(for: line.id)
                     )
-                    await MainActor.run { notepadEntryStore.addEntry(entry) }
+                    try await notepadEntryStore.addEntry(entry)
+                    if let tagSyncError = createdReminder.tagSyncError {
+                        warningMessages.append("Created reminder for \"\(line.text)\", but tags were not synced: \(tagSyncError.localizedDescription)")
+                    }
                     successCount += 1
                     succeededLineIds.append(line.id)
                 } catch {
@@ -840,7 +920,7 @@ final class NotepadViewModel: ObservableObject {
             case "work_start":
                 do {
                     try await workSessionManager.handleWorkStart(result: parsedResult, originalText: line.text)
-                    await MainActor.run { notepadEntryStore.addEntry(entry) }
+                    try await notepadEntryStore.addEntry(entry)
                     successCount += 1
                     succeededLineIds.append(line.id)
                 } catch {
@@ -853,7 +933,7 @@ final class NotepadViewModel: ObservableObject {
             case "work_end":
                 do {
                     try await workSessionManager.handleWorkEnd(result: parsedResult, originalText: line.text)
-                    await MainActor.run { notepadEntryStore.addEntry(entry) }
+                    try await notepadEntryStore.addEntry(entry)
                     successCount += 1
                     succeededLineIds.append(line.id)
                 } catch {
@@ -864,9 +944,16 @@ final class NotepadViewModel: ObservableObject {
                 }
                 
             case "meal", "expense", "income", "journal", "activity", "calorie_adjustment":
-                await MainActor.run { notepadEntryStore.addEntry(entry) }
-                successCount += 1
-                succeededLineIds.append(line.id)
+                do {
+                    try await notepadEntryStore.addEntry(entry)
+                    successCount += 1
+                    succeededLineIds.append(line.id)
+                } catch {
+                    showError("Failed to save entry: \(error.localizedDescription)")
+                    lineStore.updateStatus(for: line.id, status: .error)
+                    errorCount += 1
+                    failedLineIds.append(line.id)
+                }
                 
             default:
                 errorCount += 1
@@ -890,8 +977,10 @@ final class NotepadViewModel: ObservableObject {
         }
         
         // Show appropriate message
-        if errorCount == 0 {
+        if errorCount == 0, warningMessages.isEmpty {
             showSuccess("Processed \(successCount) item(s). All succeeded.", title: "Processing Complete")
+        } else if errorCount == 0 {
+            showWarning("Processed \(successCount) item(s) with warnings. \(warningMessages[0])", title: "Processing Complete")
         } else {
             // Try to find a specific error message from the failed lines
             var specificErrorMessage: String?
@@ -928,6 +1017,10 @@ final class NotepadViewModel: ObservableObject {
     var existingWorkSession: WorkSessionStruct? {
         get { workSessionManager.existingWorkSession }
         set { workSessionManager.existingWorkSession = newValue }
+    }
+
+    var workSessionStore: WorkSessionStore {
+        workSessionManager.store
     }
     
     // MARK: - Helper Methods for View

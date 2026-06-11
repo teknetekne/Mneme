@@ -17,6 +17,7 @@ final class WorkSessionManager: ObservableObject {
     // MARK: - Dependencies
     
     private let workSessionStore: WorkSessionStore
+    var store: WorkSessionStore { workSessionStore }
     
     // MARK: - Initialization
     
@@ -58,7 +59,7 @@ final class WorkSessionManager: ObservableObject {
         
         // End existing session
         if let existing = existingWorkSession {
-            _ = await workSessionStore.recordWorkEnd(date: pending.date, time: pending.time, object: existing.object)
+            _ = try await workSessionStore.recordWorkEnd(date: existing.date, time: pending.time, object: existing.object)
         }
         
         // Start new session
@@ -95,20 +96,25 @@ final class WorkSessionManager: ObservableObject {
             throw WorkSessionError.noActiveSession
         }
         
-        let endDate = Date()
+        let now = Date()
         let calendar = Calendar.current
-        let hour = calendar.component(.hour, from: endDate)
-        let minute = calendar.component(.minute, from: endDate)
+        let hour = calendar.component(.hour, from: now)
+        let minute = calendar.component(.minute, from: now)
         let timeString = String(format: "%02d:%02d", hour, minute)
         
-        _ = await workSessionStore.recordWorkEnd(date: endDate, time: timeString, object: activeSession.object)
+        guard try await workSessionStore.recordWorkEnd(date: activeSession.date, time: timeString, object: activeSession.object) != nil else {
+            throw WorkSessionError.noActiveSession
+        }
     }
     
     // MARK: - Private Helpers
     
     /// Start a new work session
     private func startNewSession(date: Date, time: String, object: String?) async throws {
-        _ = await workSessionStore.recordWorkStart(date: date, time: time, object: object)
+        let result = try await workSessionStore.recordWorkStart(date: date, time: time, object: object)
+        if case .needsConfirmation = result {
+            throw WorkSessionError.sessionAlreadyActive
+        }
     }
     
     // MARK: - Queries

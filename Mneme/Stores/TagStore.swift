@@ -63,14 +63,11 @@ final class TagStore: NSObject, ObservableObject {
         ("education", "purple")
     ]
     
-    private init(persistence: Persistence) {
+    init(persistence: Persistence) {
         self.persistence = persistence
         super.init()
-        DispatchQueue.main.async { [weak self] in
-            guard let self = self else { return }
-            self.setupControllers()
-            self.ensureDefaultTags()
-        }
+        setupControllers()
+        ensureDefaultTags()
     }
     
     // MARK: - Setup
@@ -366,20 +363,12 @@ final class TagStore: NSObject, ObservableObject {
     
     func commitTags(from lineId: UUID, toReminderIdentifier reminderId: String) async throws {
         let targetId = Self.stableUUID(for: reminderId)
-        let tags = getTags(for: lineId)
-        for tag in tags {
-            try await assignTag(tag.id, to: targetId)
-        }
-        try await clearTags(for: lineId)
+        try await moveTags(from: lineId, to: targetId)
     }
     
     func commitTags(from lineId: UUID, toEventIdentifier eventId: String) async throws {
         let targetId = Self.stableUUID(for: eventId)
-        let tags = getTags(for: lineId)
-        for tag in tags {
-            try await assignTag(tag.id, to: targetId)
-        }
-        try await clearTags(for: lineId)
+        try await moveTags(from: lineId, to: targetId)
     }
     
     // MARK: - Static Helpers
@@ -418,6 +407,38 @@ final class TagStore: NSObject, ObservableObject {
         let data = Data(("mneme-tag-" + identifier).utf8)
         let hash = SHA256.hash(data: data)
         return Array(hash.prefix(16))
+    }
+
+    private func moveTags(from sourceId: UUID, to targetId: UUID) async throws {
+        try await persistence.performBackgroundTask { context in
+            let request = NSFetchRequest<NSManagedObject>(entityName: "TagAssignment")
+            request.predicate = NSPredicate(format: "targetId == %@", sourceId as CVarArg)
+
+            let assignments = try context.fetch(request)
+            guard !assignments.isEmpty else { return }
+
+            let duplicateCheck = NSFetchRequest<NSManagedObject>(entityName: "TagAssignment")
+            duplicateCheck.fetchLimit = 1
+            let now = Date()
+
+            for assignment in assignments {
+                guard let tagId = assignment.value(forKey: "tagId") as? UUID else {
+                    continue
+                }
+
+                duplicateCheck.predicate = NSPredicate(format: "targetId == %@ AND tagId == %@", targetId as CVarArg, tagId as CVarArg)
+
+                if try context.fetch(duplicateCheck).isEmpty {
+                    let copiedAssignment = NSEntityDescription.insertNewObject(forEntityName: "TagAssignment", into: context)
+                    copiedAssignment.setValue(UUID(), forKey: "id")
+                    copiedAssignment.setValue(tagId, forKey: "tagId")
+                    copiedAssignment.setValue(targetId, forKey: "targetId")
+                    copiedAssignment.setValue(now, forKey: "createdAt")
+                }
+
+                context.delete(assignment)
+            }
+        }
     }
 }
 

@@ -21,13 +21,12 @@ struct LineTextView: UIViewRepresentable {
         textView.textContainerInset = .zero
         textView.textContainer.lineFragmentPadding = 0
         textView.textContainer.widthTracksTextView = true
-        // Ensure layout manager allows growing
-        textView.layoutManager.allowsNonContiguousLayout = false
         textView.font = font
         textView.returnKeyType = .default
         textView.keyboardType = .default
         textView.autocorrectionType = .yes
         textView.autocapitalizationType = .none
+        textView.accessibilityIdentifier = "notepad.line.\(lineId.uuidString)"
         
         let placeholderLabel = UILabel()
         placeholderLabel.text = placeholder
@@ -202,4 +201,3 @@ private final class FocusableTextView: UITextView {
     }
 }
 #endif
-

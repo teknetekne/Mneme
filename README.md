@@ -10,85 +10,175 @@
   <img src="https://img.shields.io/badge/Platform-iOS%2026.1-lightgrey.svg" alt="Platform: iOS 26.1">
 </p>
 
-## 💡 **What is Mneme?**
+Mneme (pronounced *nee-mee*, named after the Muse of memory) turns free-form text into structured actions. One text field replaces your calendar, health tracker, finance log, and diary.
 
-Visit our website: [mneme.website](https://www.mneme.website)
-
-Mneme (pronounced *nee-mee*, named after the Muse of memory) turns your free-form thoughts into structured actions. Instead of juggling 5 different apps for your calendar, health, finance, and diary, you just type naturally. **Profoundly Intuitive. The intelligent workspace that understands you.**
+Powered by Apple Foundation Models, everything runs on-device. Your data never touches a third-party server.
 
 <p align="center">
   <a href="https://www.mneme.website">
-    <img src="https://www.mneme.website/assets/notepad.png" width="250" alt="Mneme UI">
+    <img src="https://www.mneme.website/assets/notepad.png" width="250" alt="Mneme Notepad">
   </a>
 </p>
 
-Powered by Apple Foundation Models, everything happens on-device. Your data never touches a third-party server.
+[mneme.website](https://www.mneme.website)
 
-## ⚡️ Usage
+## Usage
 
-Start typing naturally. Mneme uses simple formatting to understand your intent.
+Type naturally. Mneme understands what you mean.
 
-### 📍 Locations (`@`)
-Use the `@` symbol to specify a location for your events or reminders.
-- `Dinner with Ashley @ Hard Rock Cafe`
-- `Meeting at 10am @ Office`
+### Events & Reminders
 
-### 📔 Journal & Mood (`:`)
-Start a line with `:` to create a journal entry by choosing your mood.
-- `: I feel great today!`
-- `: Had a productive meeting with the team.`
+```
+Meeting with Sarah tomorrow at 3pm
+Dentist appointment next friday 10:00
+Call mom at 18:00
+```
 
-### 💰 Smart Variables
-Define custom variables for recurring values like your salary or rent.
-- `+salary` → Adds your defined salary amount.
-- `-rent` → Deducts your rent amount.
+Add a location with `@`:
 
-### 🍎 Health & Food
-Log your meals naturally. Mneme calculates calories automatically.
-- `Ate 200g pizza`
-- `Drank 1 cup of coffee`
+```
+Dinner with Ashley @ Hard Rock Cafe
+```
 
+### Expenses & Income
+
+```
+Coffee 4.50 USD
+Groceries 120 TRY
+Freelance payment 500 EUR
+```
+
+### Meals & Calories
+
+Mneme looks up calories via the USDA database automatically.
+
+```
+Ate 200g chicken breast
+2 eggs and toast
+Coffee with milk
+```
+
+### Work Sessions
+
+```
+Work started
+Work ended
+Work started on iOS project
+```
+
+### Activities
+
+```
+Ran 5km
+30 min cycling
+```
+
+### Journal & Mood (`:`)
+
+Type `:` to open the mood picker, then select an emoji to start a journal entry. Journal parsing uses the emoji-prefixed text.
+
+```
+: Productive day, finished the refactor
+: Feeling tired after the long meeting
+```
+
+### Smart Variables
+
+Define reusable shortcuts for recurring amounts. Combine them with `+` and `-`:
+
+```
++salary
+-rent
++salary-rent-bills
++breakfast (meal variable, logs calories)
+```
+
+### Calorie Adjustments
+
+```
++200 kcal
+-150 kcal
+```
 
 ## Key Capabilities
 
-- ⚡️ **Frictionless Input**: One text field for everything. Debounced parsing understands intent, time, money, and calories instantly.
-- 🧠 **On-Device Intelligence**: Uses `SystemLanguageModel` and custom parsers to understand English, Turkish, French, German, and more. No cloud latency, no privacy risks.
-- 🔒 **Privacy First**: Your life stays on your phone. iCloud sync mirrors data across your devices, but logic runs locally.
-- 🔗 **Deep Integration**: Native support for EventKit (Calendar/Reminders) and HealthKit. It feels like part of iOS.
-- 📊 **Insightful**: Beautiful charts for finances and calories, plus AI-generated correlations (e.g., "You spend more money on days you don't sleep well").
+- **One Input, Many Actions** — A single text field handles events, reminders, expenses, meals, work sessions, activities, and journal entries.
+- **On-Device NLP** — Intent classification and entity extraction via `SystemLanguageModel`. Supports multilingual input, with event/reminder translation when needed. No cloud calls, no latency.
+- **Privacy First** — All processing happens locally. iCloud sync mirrors data across your devices, but logic never leaves the phone.
+- **Native Integrations** — Calendar and Reminders via EventKit. Steps, active energy, and distance via HealthKit (read-only).
+- **Analytics Dashboard** — Six chart tabs: Overview, Productivity, Calories, Balance, Mood, and Analysis with AI-generated correlations.
+- **Smart Variables** — Define named shortcuts for recurring expenses, income, or meals. Combine them in expressions (`+salary-rent`).
+- **Multi-Currency** — Automatic currency conversion via FreeCurrencyAPI. Expenses in any currency are converted to your base currency.
 
-## 🛠 Tech Stack
+## App Structure
 
-Designed for the modern Apple ecosystem, pushing the limits of what SwiftUI and on-device AI can do.
+The app has four main tabs:
 
-- **Language**: Swift 6
-- **UI**: SwiftUI + Charts
-- **AI/NLP**: FoundationModels (`SystemLanguageModel`), Translation framework, Custom Regex Parsers.
-- **Persistence**: Core Data mirrored to CloudKit (with local fallback).
-- **Integrations**: EventKit, HealthKit (Read-Only).
-- **Data Sources**: USDA API (Calorie Data), FreeCurrencyAPI (Exchange Rates).
-- **Architecture**: MVVM with centralized `ParsingService` and `LineStore`.
+| Tab | Purpose |
+|---|---|
+| **Notepad** | Primary input — type and Mneme parses |
+| **Reminders** | View and manage reminders (EventKit) |
+| **Calendar** | View calendar events (EventKit) |
+| **Summary** | Analytics dashboard with 6 chart views |
 
-## 🏗 How Parsing Works (The Engine)
+## How Parsing Works
 
-1. **Input**: User types in the Notepad. `NotepadViewModel` debounces the input.
-2. **NLP Pipeline**: The text is passed to `NLPService`, which utilizes on-device Foundation Models to classify intent (Event vs. Expense vs. Journal).
-3. **Extraction**: Specialized handlers (`MealHandler`, `FinanceHandler`, etc.) extract entities like Amount, Date, Calories using a mix of LLM extraction and deterministic regex for 100% accuracy on critical numbers.
-4. **Action**:
-    - **Health**: Reads activity data (Steps, Active Energy) from HealthKit. Consumed calories are enriched via **USDA API**.
-    - **Calendar**: Syncs with EventKit.
-    - **Storage**: Saves structured data to Core Data for charts/history.
+1. **Input** — User types in the Notepad. `NotepadViewModel` debounces with a 300ms throttle and 800ms parse delay.
+2. **Variable Check** — `VariableHandler` checks for variable expressions (`+salary`, `-rent+bonus`) before NLP.
+3. **Intent Classification** — `IntentClassificationService` classifies raw text into one of: `meal`, `expense`, `income`, `event`, `reminder`, `activity`, `work_start`, `work_end`, `journal`, `calorie_adjustment`.
+4. **Translation** — Event and reminder extraction translate non-English text on-device when needed.
+5. **Entity Extraction** — Specialized handlers (`MealHandler`, `ExpenseHandler`, `EventHandler`, `ActivityHandler`, `WorkSessionHandler`, `JournalHandler`, `CalorieAdjustmentHandler`) extract structured fields using a mix of LLM extraction and deterministic regex.
+6. **Action** — Results are saved to Core Data. Events and reminders sync to EventKit. Calorie data is enriched via the USDA API.
 
-## 🤝 Contributing
+## Tech Stack
 
-Contributions are welcome! Whether it's fixing a bug, improving the parser for a new language, or adding a new chart type.
+- **Language**: Swift 6 with strict concurrency
+- **UI**: SwiftUI + Swift Charts
+- **AI/NLP**: Apple Foundation Models (`SystemLanguageModel`), on-device Translation, custom regex parsers
+- **Persistence**: Core Data with `NSPersistentCloudKitContainer` (automatic iCloud sync, local fallback)
+- **Integrations**: EventKit (Calendar + Reminders), HealthKit (read-only)
+- **Data Sources**: USDA FoodData Central (calories), FreeCurrencyAPI (exchange rates)
+- **Architecture**: MVVM with composition — `NotepadViewModel` coordinates `LineStore`, `LineManager`, `TagManager`, `EventKitManager`, `WorkSessionManager`, and `LocationManager`
 
-1. Fork the Project
-2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the Branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+## Requirements
 
-## ⚖️ License & Copyright
+- iOS 26.1+
+- Xcode 26+
+- No external dependencies (no CocoaPods, Carthage, or SPM)
 
-Source Code: The source code of Mneme is licensed under the **GNU General Public License v3.0 (GPLv3)**. You are free to use, modify, and distribute the code, provided that any derivative works are also open-source under the same license. See [LICENSE](LICENSE) for details.
+## Building
+
+```bash
+xcodebuild build \
+  -project Mneme.xcodeproj \
+  -scheme Mneme \
+  -destination 'platform=iOS Simulator,name=iPhone 16'
+```
+
+### API Keys (optional)
+
+Set these in a local Xcode scheme or your local environment. Do not commit secrets to the shared scheme:
+
+- `CURRENCY_API_KEY` — [FreeCurrencyAPI](https://freecurrencyapi.com) key for exchange rates
+- `USDA_API_KEY` — [USDA FoodData Central](https://fdc.nal.usda.gov/api-guide) key (falls back to `DEMO_KEY`)
+
+### LSP / Build Server
+
+Generate `buildServer.json` locally when needed:
+
+```bash
+xcode-build-server config -project Mneme.xcodeproj -scheme Mneme
+```
+
+## Contributing
+
+Contributions are welcome. Bug fixes, parser improvements for new languages, new chart types, or new intent handlers.
+
+1. Fork the repo
+2. Create a feature branch (`git checkout -b feature/my-feature`)
+3. Commit your changes
+4. Push and open a Pull Request
+
+## License
+
+Source code is licensed under the **GNU General Public License v3.0 (GPLv3)**. See [LICENSE](LICENSE) for details.

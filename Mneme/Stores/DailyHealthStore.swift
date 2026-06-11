@@ -39,6 +39,9 @@ final class DailyHealthStore: NSObject, ObservableObject {
     private let context: NSManagedObjectContext
     private let backgroundContext: NSManagedObjectContext
     private let writeQueue = DispatchQueue(label: "com.mneme.dailyhealthstore.write", qos: .userInitiated)
+    private var hasDailyHealthStatEntity: Bool {
+        context.persistentStoreCoordinator?.managedObjectModel.entitiesByName["DailyHealthStat"] != nil
+    }
     
     init(persistence: Persistence = PersistenceController.shared) {
         self.persistence = persistence
@@ -62,6 +65,8 @@ final class DailyHealthStore: NSObject, ObservableObject {
     }
     
     func getMetric(for date: Date) -> DailyHealthMetric? {
+        guard hasDailyHealthStatEntity else { return nil }
+
         let calendar = Calendar.current
         let dayStart = calendar.startOfDay(for: date)
         
@@ -82,6 +87,8 @@ final class DailyHealthStore: NSObject, ObservableObject {
     }
     
     func saveMetric(date: Date, activeEnergy: Double? = nil, stepCount: Double? = nil, distance: Double? = nil) async {
+        guard hasDailyHealthStatEntity else { return }
+
         let calendar = Calendar.current
         let dayStart = calendar.startOfDay(for: date)
         

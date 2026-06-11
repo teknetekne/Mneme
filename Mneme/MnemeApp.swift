@@ -15,7 +15,6 @@ struct MnemeApp: App {
     private let tagStore = TagStore.shared
 
     init() {
-        HapticHelper.prepareHapticEngine()
         _ = cloudSyncStatus
         _ = tagStore
         

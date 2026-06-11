@@ -99,15 +99,17 @@ final class NotepadEntryStore: NSObject, ObservableObject {
     private var fetchedResultsController: NSFetchedResultsController<ParsedEntry>?
     private let persistence: Persistence
     private let context: NSManagedObjectContext
+    private let shouldRunMigration: Bool
     
-    init(persistence: Persistence = PersistenceController.shared) {
+    init(persistence: Persistence = PersistenceController.shared, runMigration: Bool = true) {
         self.persistence = persistence
         self.context = persistence.viewContext
+        self.shouldRunMigration = runMigration
         super.init()
         setupFetchedResultsController()
         
         Task {
-            if DataMigrationService.shared.needsMigration {
+            if shouldRunMigration, DataMigrationService.shared.needsMigration {
                 try? await DataMigrationService.shared.performMigration()
             }
             await MainActor.run { self.refreshEntries() }
@@ -143,47 +145,41 @@ final class NotepadEntryStore: NSObject, ObservableObject {
         entries = fetchedObjects.map { ParsedNotepadEntry(from: $0) }
     }
     
-    @MainActor
-    func deleteEntry(_ entry: ParsedNotepadEntry) {
-        Task {
-            try? await persistence.performBackgroundTask { context in
-                let fetchRequest: NSFetchRequest<ParsedEntry> = ParsedEntry.fetchRequest()
-                fetchRequest.predicate = NSPredicate(format: "id == %@", entry.id as CVarArg)
-                
-                if let results = try? context.fetch(fetchRequest), let entity = results.first {
-                    context.delete(entity)
-                }
-                return ()
+    func deleteEntry(_ entry: ParsedNotepadEntry) async throws {
+        try await persistence.performBackgroundTask { context in
+            let fetchRequest: NSFetchRequest<ParsedEntry> = ParsedEntry.fetchRequest()
+            fetchRequest.predicate = NSPredicate(format: "id == %@", entry.id as CVarArg)
+
+            if let entity = try context.fetch(fetchRequest).first {
+                context.delete(entity)
             }
-            // Notify listeners to update immediately
-            NotificationCenter.default.post(name: .notepadEntryDeleted, object: nil)
+            return ()
         }
+
+        NotificationCenter.default.post(name: .notepadEntryDeleted, object: nil)
     }
     
-    @MainActor
-    func addEntry(_ entry: ParsedNotepadEntry) {
-        Task {
-            try? await persistence.performBackgroundTask { context in
-                let parsedEntry = ParsedEntry(context: context)
-                parsedEntry.id = entry.id
-                parsedEntry.originalText = entry.originalText
-                parsedEntry.intent = entry.intent
-                parsedEntry.object = entry.object
-                parsedEntry.reminderTime = entry.reminderTime
-                parsedEntry.reminderDay = entry.reminderDay
-                parsedEntry.eventTime = entry.eventTime
-                parsedEntry.eventDay = entry.eventDay
-                parsedEntry.currency = entry.currency
-                parsedEntry.amount = entry.amount ?? 0
-                parsedEntry.duration = entry.duration ?? 0
-                parsedEntry.distance = entry.distance ?? 0
-                parsedEntry.mealQuantity = entry.mealQuantity
-                parsedEntry.mealKcal = entry.mealKcal ?? 0
-                parsedEntry.createdAt = entry.date
-                parsedEntry.modifiedAt = Date()
-                parsedEntry.deviceId = DeviceIdHelper.getOrCreateDeviceId()
-                return ()
-            }
+    func addEntry(_ entry: ParsedNotepadEntry) async throws {
+        try await persistence.performBackgroundTask { context in
+            let parsedEntry = ParsedEntry(context: context)
+            parsedEntry.id = entry.id
+            parsedEntry.originalText = entry.originalText
+            parsedEntry.intent = entry.intent
+            parsedEntry.object = entry.object
+            parsedEntry.reminderTime = entry.reminderTime
+            parsedEntry.reminderDay = entry.reminderDay
+            parsedEntry.eventTime = entry.eventTime
+            parsedEntry.eventDay = entry.eventDay
+            parsedEntry.currency = entry.currency
+            parsedEntry.amount = entry.amount ?? 0
+            parsedEntry.duration = entry.duration ?? 0
+            parsedEntry.distance = entry.distance ?? 0
+            parsedEntry.mealQuantity = entry.mealQuantity
+            parsedEntry.mealKcal = entry.mealKcal ?? 0
+            parsedEntry.createdAt = entry.date
+            parsedEntry.modifiedAt = Date()
+            parsedEntry.deviceId = DeviceIdHelper.getOrCreateDeviceId()
+            return ()
         }
     }
     

@@ -7,10 +7,19 @@ import UIKit
 
 
 struct NotepadView: View {
-    @StateObject private var viewModel = NotepadViewModel()
+    @StateObject private var viewModel: NotepadViewModel
+
+    @MainActor
+    init(viewModel: NotepadViewModel? = nil) {
+        _viewModel = StateObject(wrappedValue: viewModel ?? NotepadFeatureFactory.makeViewModel())
+    }
     
     var body: some View {
-        NotepadContent(viewModel: viewModel, lineStore: viewModel.lineStore)
+        NotepadContent(
+            viewModel: viewModel,
+            lineStore: viewModel.lineStore,
+            workSessionStore: viewModel.workSessionStore
+        )
     }
 }
 
@@ -18,6 +27,7 @@ struct NotepadContent: View {
     @Environment(\.colorScheme) private var colorScheme
     @ObservedObject var viewModel: NotepadViewModel
     @ObservedObject var lineStore: LineStore
+    @ObservedObject var workSessionStore: WorkSessionStore
     
     private var backgroundColor: Color { Color.appBackground(colorScheme: colorScheme) }
     #if os(iOS)
@@ -28,7 +38,6 @@ struct NotepadContent: View {
     @State private var showActiveWorkMenu: Bool = false
     @State private var newWorkProjectName: String = ""
     @StateObject private var variableStore = VariableStore.shared
-    @StateObject private var workSessionStore = WorkSessionStore.shared
     @FocusState private var focusedLineId: UUID?
     
     @State private var showAddTagSheet = false
@@ -110,6 +119,10 @@ struct NotepadContent: View {
     private var linesScrollView: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 10) {
+                if !viewModel.isNLPSupported {
+                    unsupportedBanner
+                }
+
                 ForEach(lineStore.lineOrder, id: \.self) { lineId in
                     if let line = lineStore.linesById[lineId], line.isActive {
                         LineRowView(
@@ -144,6 +157,28 @@ struct NotepadContent: View {
             }
             .padding(.vertical, 8)
         }
+    }
+
+    private var unsupportedBanner: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Natural language parsing is unavailable on this device.")
+                    .font(.headline)
+                Text("You can still type, but parsing and processing are disabled until Mneme runs on supported hardware.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+        }
+        .padding(16)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .padding(.horizontal, 16)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("notepad.nlpUnsupportedBanner")
     }
     
 
@@ -293,7 +328,7 @@ struct NotepadContent: View {
     private func applyConditionalModifiers<Content: View>(to content: Content) -> some View {
         #if os(iOS)
         content.safeAreaInset(edge: .bottom) {
-            if hasReminderOrEvent {
+            if viewModel.isNLPSupported && hasReminderOrEvent {
                 reminderEventToolbar
             }
         }
@@ -385,14 +420,15 @@ struct NotepadContent: View {
                     }
                 }
             }
-                ToolbarItem(placement: .confirmationAction) {
-                    Group {
-                        Button("Done", systemImage: "checkmark", role: .confirm) {
-                            finishEditing()
-                        }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        finishEditing()
+                    } label: {
+                        Label("Done", systemImage: "checkmark")
                     }
                     .tint(.orange)
-                    .disabled(!viewModel.allLinesParsedSuccessfully)
+                    .disabled(!viewModel.isNLPSupported || !viewModel.allLinesParsedSuccessfully)
+                    .accessibilityIdentifier("notepad.doneButton")
                 }
         }
         .sheet(isPresented: $showVariableDialog) {
@@ -445,7 +481,7 @@ struct NotepadContent: View {
             SnackbarView(
                 title: viewModel.snackbarTitle,
                 message: viewModel.snackbarMessage,
-                style: viewModel.snackbarType == .success ? .success : .error,
+                style: snackbarStyle,
                 onDismiss: {
                     withAnimation {
                         viewModel.showSnackbar = false
@@ -457,6 +493,17 @@ struct NotepadContent: View {
         .transition(.move(edge: .bottom).combined(with: .opacity))
         .animation(.spring(response: 0.3), value: viewModel.showSnackbar)
         .zIndex(100)
+    }
+
+    private var snackbarStyle: SnackbarStyle {
+        switch viewModel.snackbarType {
+        case .success:
+            return .success
+        case .error:
+            return .error
+        case .warning:
+            return .warning
+        }
     }
 
     // MARK: - Active Work Session Sheet
@@ -545,15 +592,19 @@ struct NotepadContent: View {
         let object = projectName.isEmpty ? nil : projectName
 
         Task {
-            let result = await workSessionStore.recordWorkStart(date: now, time: currentTime, object: object)
-            switch result {
-            case .success:
-                viewModel.showSnack("Work started at \(currentTime)" + (object != nil ? " - \(object!)" : ""))
-                newWorkProjectName = ""
-            case .needsConfirmation(let existingSession):
-                viewModel.pendingWorkStart = (date: now, time: currentTime, object: object)
-                viewModel.existingWorkSession = existingSession
-                viewModel.showWorkSessionConfirmation = true
+            do {
+                let result = try await workSessionStore.recordWorkStart(date: now, time: currentTime, object: object)
+                switch result {
+                case .success:
+                    viewModel.showSnack("Work started at \(currentTime)" + (object != nil ? " - \(object!)" : ""))
+                    newWorkProjectName = ""
+                case .needsConfirmation(let existingSession):
+                    viewModel.pendingWorkStart = (date: now, time: currentTime, object: object)
+                    viewModel.existingWorkSession = existingSession
+                    viewModel.showWorkSessionConfirmation = true
+                }
+            } catch {
+                viewModel.showError("Failed to start work session: \(error.localizedDescription)")
             }
         }
     }
@@ -587,15 +638,19 @@ struct NotepadContent: View {
         }
 
         Task {
-            if let session = await workSessionStore.recordWorkEnd(date: date, time: currentTime, object: activeSession.object),
-               let duration = session.durationMinutes {
-                let hours = duration / 60
-                let minutes = duration % 60
-                let durationText = hours > 0 ? "\(hours)h \(minutes)m" : "\(minutes)m"
-                let objectText = session.object != nil ? " (\(session.object!))" : ""
-                viewModel.showSnack("Work ended. Duration: \(durationText)\(objectText)")
-            } else {
-                viewModel.showSnack("Failed to end work session")
+            do {
+                if let session = try await workSessionStore.recordWorkEnd(date: date, time: currentTime, object: activeSession.object),
+                   let duration = session.durationMinutes {
+                    let hours = duration / 60
+                    let minutes = duration % 60
+                    let durationText = hours > 0 ? "\(hours)h \(minutes)m" : "\(minutes)m"
+                    let objectText = session.object != nil ? " (\(session.object!))" : ""
+                    viewModel.showSnack("Work ended. Duration: \(durationText)\(objectText)")
+                } else {
+                    viewModel.showSnack("Failed to end work session")
+                }
+            } catch {
+                viewModel.showError("Failed to end work session: \(error.localizedDescription)")
             }
         }
     }

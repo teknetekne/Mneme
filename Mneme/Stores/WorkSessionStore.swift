@@ -135,7 +135,7 @@ final class WorkSessionStore: NSObject, ObservableObject {
         sessions = fetchedObjects.map { WorkSessionStruct(from: $0) }
     }
     
-    func recordWorkStart(date: Date, time: String, object: String?, forceReplace: Bool = false) async -> WorkStartResult {
+    func recordWorkStart(date: Date, time: String, object: String?, forceReplace: Bool = false) async throws -> WorkStartResult {
         let calendar = Calendar.current
         let dayStart = calendar.startOfDay(for: date)
 
@@ -150,110 +150,93 @@ final class WorkSessionStore: NSObject, ObservableObject {
         }
 
         let deviceId = DeviceIdHelper.getOrCreateDeviceId()
-        do {
-            try await persistence.performBackgroundTask { context in
-                // Clean up all incomplete sessions before starting a new one
-                if !incompleteSessions.isEmpty {
-                    let fetchRequest: NSFetchRequest<WorkSession> = WorkSession.fetchRequest()
-                    fetchRequest.predicate = NSPredicate(format: "endTime == nil")
+        try await persistence.performBackgroundTask { context in
+            if !incompleteSessions.isEmpty {
+                let fetchRequest: NSFetchRequest<WorkSession> = WorkSession.fetchRequest()
+                fetchRequest.predicate = NSPredicate(format: "endTime == nil")
 
-                    if let incompleteEntities = try? context.fetch(fetchRequest) {
-                        for entity in incompleteEntities {
-                            context.delete(entity)
-                        }
-                    }
+                let incompleteEntities = try context.fetch(fetchRequest)
+                for entity in incompleteEntities {
+                    context.delete(entity)
                 }
-
-                // If object is specified, check if there's already an incomplete session with same object for this day
-                if let object = object, !object.isEmpty {
-                    let normalizedObject = object.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
-                    let fetchRequest: NSFetchRequest<WorkSession> = WorkSession.fetchRequest()
-                    fetchRequest.predicate = NSPredicate(format: "date >= %@ AND date < %@ AND endTime == nil AND object ==[c] %@", dayStart as NSDate, calendar.date(byAdding: .day, value: 1, to: dayStart)! as NSDate, normalizedObject)
-
-                    if let existingEntity = try? context.fetch(fetchRequest).first {
-                        existingEntity.startTime = time
-                        existingEntity.modifiedAt = Date()
-                        return
-                    }
-                }
-
-                // Create new session
-                let sessionEntity = WorkSession(context: context)
-                sessionEntity.id = UUID()
-                sessionEntity.date = date
-                sessionEntity.startTime = time
-                sessionEntity.endTime = nil
-                sessionEntity.object = object
-                sessionEntity.createdAt = date
-                sessionEntity.modifiedAt = Date()
-                sessionEntity.deviceId = deviceId
             }
-        } catch {
-            print("WorkSessionStore recordWorkStart error: \(error)")
+
+            if let object = object, !object.isEmpty {
+                let normalizedObject = object.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+                let fetchRequest: NSFetchRequest<WorkSession> = WorkSession.fetchRequest()
+                fetchRequest.predicate = NSPredicate(format: "date >= %@ AND date < %@ AND endTime == nil AND object ==[c] %@", dayStart as NSDate, calendar.date(byAdding: .day, value: 1, to: dayStart)! as NSDate, normalizedObject)
+
+                if let existingEntity = try context.fetch(fetchRequest).first {
+                    existingEntity.startTime = time
+                    existingEntity.modifiedAt = Date()
+                    return
+                }
+            }
+
+            let sessionEntity = WorkSession(context: context)
+            sessionEntity.id = UUID()
+            sessionEntity.date = date
+            sessionEntity.startTime = time
+            sessionEntity.endTime = nil
+            sessionEntity.object = object
+            sessionEntity.createdAt = date
+            sessionEntity.modifiedAt = Date()
+            sessionEntity.deviceId = deviceId
         }
         return .success
     }
     
-    func recordWorkEnd(date: Date, time: String, object: String? = nil) async -> WorkSessionStruct? {
-        let calendar = Calendar.current
-        let dayStart = calendar.startOfDay(for: date)
-        let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart)!
+    func recordWorkEnd(date: Date, time: String, object: String? = nil) async throws -> WorkSessionStruct? {
+        return try await persistence.performBackgroundTask { context in
+            let fetchRequest: NSFetchRequest<WorkSession> = WorkSession.fetchRequest()
+            fetchRequest.predicate = NSPredicate(format: "endTime == nil")
+            fetchRequest.sortDescriptors = [NSSortDescriptor(keyPath: \WorkSession.date, ascending: false)]
 
-        do {
-            return try await persistence.performBackgroundTask { context in
-                let fetchRequest: NSFetchRequest<WorkSession> = WorkSession.fetchRequest()
-                fetchRequest.predicate = NSPredicate(format: "date >= %@ AND date < %@ AND endTime == nil", dayStart as NSDate, dayEnd as NSDate)
-                fetchRequest.sortDescriptors = [NSSortDescriptor(keyPath: \WorkSession.date, ascending: false)]
-
-                guard let incompleteEntities = try? context.fetch(fetchRequest), !incompleteEntities.isEmpty else {
-                    return nil
-                }
-
-                var matchingEntity: WorkSession?
-
-                // If object is specified, match by object
-                if let object = object, !object.isEmpty {
-                    let normalizedObject = object.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
-                    matchingEntity = incompleteEntities.first { entity in
-                        let sessionObject = entity.object?.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                        return sessionObject == normalizedObject || sessionObject.contains(normalizedObject) || normalizedObject.contains(sessionObject)
-                    }
-                } else if incompleteEntities.count == 1 {
-                    matchingEntity = incompleteEntities.first
-                } else {
-                    matchingEntity = incompleteEntities.first
-                }
-
-                guard let entity = matchingEntity else {
-                    return nil
-                }
-
-                entity.endTime = time
-                entity.modifiedAt = Date()
-
-                if let startTime = entity.startTime {
-                    let startComponents = startTime.split(separator: ":")
-                    let endComponents = time.split(separator: ":")
-                    if startComponents.count == 2, endComponents.count == 2,
-                       let startHour = Int(startComponents[0]),
-                       let startMinute = Int(startComponents[1]),
-                       let endHour = Int(endComponents[0]),
-                       let endMinute = Int(endComponents[1]) {
-                        let startTotal = startHour * 60 + startMinute
-                        let endTotal = endHour * 60 + endMinute
-                        var duration = endTotal - startTotal
-                        if duration < 0 {
-                            duration += 24 * 60
-                        }
-                        entity.durationMinutes = Int32(duration > 0 ? duration : 0)
-                    }
-                }
-
-                return WorkSessionStruct(from: entity)
+            let incompleteEntities = try context.fetch(fetchRequest)
+            guard !incompleteEntities.isEmpty else {
+                return nil
             }
-        } catch {
-            print("WorkSessionStore recordWorkEnd error: \(error)")
-            return nil
+
+            var matchingEntity: WorkSession?
+
+            if let object = object, !object.isEmpty {
+                let normalizedObject = object.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+                matchingEntity = incompleteEntities.first { entity in
+                    let sessionObject = entity.object?.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                    return sessionObject == normalizedObject || sessionObject.contains(normalizedObject) || normalizedObject.contains(sessionObject)
+                }
+            } else if incompleteEntities.count == 1 {
+                matchingEntity = incompleteEntities.first
+            } else {
+                matchingEntity = incompleteEntities.first
+            }
+
+            guard let entity = matchingEntity else {
+                return nil
+            }
+
+            entity.endTime = time
+            entity.modifiedAt = Date()
+
+            if let startTime = entity.startTime {
+                let startComponents = startTime.split(separator: ":")
+                let endComponents = time.split(separator: ":")
+                if startComponents.count == 2, endComponents.count == 2,
+                   let startHour = Int(startComponents[0]),
+                   let startMinute = Int(startComponents[1]),
+                   let endHour = Int(endComponents[0]),
+                   let endMinute = Int(endComponents[1]) {
+                    let startTotal = startHour * 60 + startMinute
+                    let endTotal = endHour * 60 + endMinute
+                    var duration = endTotal - startTotal
+                    if duration < 0 {
+                        duration += 24 * 60
+                    }
+                    entity.durationMinutes = Int32(duration > 0 ? duration : 0)
+                }
+            }
+
+            return WorkSessionStruct(from: entity)
         }
     }
     
