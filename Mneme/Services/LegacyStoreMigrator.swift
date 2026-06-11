@@ -10,6 +10,7 @@ struct LegacyStoreMigrator {
         var calorieCache: [LegacyCalorieCache]
         var currencySettings: [LegacyCurrencySetting]
         var userProfiles: [LegacyUserProfile]
+        var dailyHealthStats: [LegacyDailyHealthStat]
     }
 
     struct LegacyParsedEntry {
@@ -86,6 +87,16 @@ struct LegacyStoreMigrator {
         let lastHealthSync: Date?
     }
 
+    struct LegacyDailyHealthStat {
+        let id: UUID
+        let date: Date
+        let activeEnergyBurned: Double
+        let stepCount: Double
+        let distanceWalkingRunning: Double
+        let createdAt: Date
+        let modifiedAt: Date
+    }
+
     static func prepareMigrationIfNeeded(storeURL: URL?, managedObjectModel: NSManagedObjectModel) -> DataDump? {
         guard let storeURL, FileManager.default.fileExists(atPath: storeURL.path) else {
             return nil
@@ -102,8 +113,7 @@ struct LegacyStoreMigrator {
         }
 
         guard
-            let legacyModel = loadLegacyModel(),
-            legacyModel.isConfiguration(withName: nil, compatibleWithStoreMetadata: metadata)
+            let legacyModel = loadLegacyModel(compatibleWith: metadata)
         else {
             return nil
         }
@@ -213,6 +223,17 @@ struct LegacyStoreMigrator {
                 profile.modifiedAt = now
             }
 
+            dump.dailyHealthStats.forEach { legacy in
+                let stat = DailyHealthStat(context: context)
+                stat.id = legacy.id
+                stat.date = legacy.date
+                stat.activeEnergyBurned = legacy.activeEnergyBurned
+                stat.stepCount = legacy.stepCount
+                stat.distanceWalkingRunning = legacy.distanceWalkingRunning
+                stat.createdAt = legacy.createdAt
+                stat.modifiedAt = legacy.modifiedAt
+            }
+
             if context.hasChanges {
                 try context.save()
             }
@@ -221,11 +242,22 @@ struct LegacyStoreMigrator {
 }
 
 private extension LegacyStoreMigrator {
-    static func loadLegacyModel() -> NSManagedObjectModel? {
-        guard let url = Bundle.main.url(forResource: "Mneme 1", withExtension: "mom", subdirectory: "Mneme.momd") else {
-            return nil
+    static func loadLegacyModel(compatibleWith metadata: [String: Any]) -> NSManagedObjectModel? {
+        for resourceName in ["Mneme 1", "Mneme"] {
+            guard let url = Bundle.main.url(
+                forResource: resourceName,
+                withExtension: "mom",
+                subdirectory: "Mneme.momd"
+            ),
+            let model = NSManagedObjectModel(contentsOf: url) else {
+                continue
+            }
+
+            if model.isConfiguration(withName: nil, compatibleWithStoreMetadata: metadata) {
+                return model
+            }
         }
-        return NSManagedObjectModel(contentsOf: url)
+        return nil
     }
 
     static func extractData(from storeURL: URL, model: NSManagedObjectModel) throws -> DataDump {
@@ -244,6 +276,7 @@ private extension LegacyStoreMigrator {
         let calorieEntries = try fetchCalorieCache(in: context)
         let currencySettings = try fetchCurrencySettings(in: context)
         let userProfiles = try fetchUserProfiles(in: context)
+        let dailyHealthStats = try fetchDailyHealthStats(in: context)
 
         return DataDump(
             parsedEntries: parsedEntries,
@@ -252,7 +285,8 @@ private extension LegacyStoreMigrator {
             reminderTags: reminderTags,
             calorieCache: calorieEntries,
             currencySettings: currencySettings,
-            userProfiles: userProfiles
+            userProfiles: userProfiles,
+            dailyHealthStats: dailyHealthStats
         )
     }
 
@@ -367,6 +401,29 @@ private extension LegacyStoreMigrator {
                 age: (object.value(forKey: "age") as? NSNumber)?.intValue,
                 biologicalSex: object.value(forKey: "biologicalSex") as? String,
                 lastHealthSync: object.value(forKey: "lastHealthSync") as? Date
+            )
+        }
+    }
+
+    static func fetchDailyHealthStats(in context: NSManagedObjectContext) throws -> [LegacyDailyHealthStat] {
+        guard context.persistentStoreCoordinator?
+            .managedObjectModel
+            .entitiesByName["DailyHealthStat"] != nil else {
+            return []
+        }
+
+        let request = NSFetchRequest<NSManagedObject>(entityName: "DailyHealthStat")
+        return try context.fetch(request).map { object in
+            let date = object.value(forKey: "date") as? Date ?? Date()
+            let createdAt = object.value(forKey: "createdAt") as? Date ?? date
+            return LegacyDailyHealthStat(
+                id: object.value(forKey: "id") as? UUID ?? UUID(),
+                date: date,
+                activeEnergyBurned: (object.value(forKey: "activeEnergyBurned") as? NSNumber)?.doubleValue ?? 0,
+                stepCount: (object.value(forKey: "stepCount") as? NSNumber)?.doubleValue ?? 0,
+                distanceWalkingRunning: (object.value(forKey: "distanceWalkingRunning") as? NSNumber)?.doubleValue ?? 0,
+                createdAt: createdAt,
+                modifiedAt: object.value(forKey: "modifiedAt") as? Date ?? createdAt
             )
         }
     }

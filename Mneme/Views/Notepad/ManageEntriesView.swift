@@ -7,6 +7,7 @@ struct ManageEntriesView: View {
     @ObservedObject private var store = NotepadEntryStore.shared
     @State private var editingEntry: ParsedNotepadEntry?
     @State private var isProcessing = false
+    @State private var processingError: String?
     
     private var entries: [ParsedNotepadEntry] {
         store.getEntries(for: date).filter { entry in
@@ -86,6 +87,19 @@ struct ManageEntriesView: View {
                         .background(.regularMaterial)
                         .clipShape(RoundedRectangle(cornerRadius: 10))
                 }
+            }
+            .alert(
+                "Could Not Update Entry",
+                isPresented: Binding(
+                    get: { processingError != nil },
+                    set: { if !$0 { processingError = nil } }
+                )
+            ) {
+                Button("OK", role: .cancel) {
+                    processingError = nil
+                }
+            } message: {
+                Text(processingError ?? "")
             }
             .navigationTitle(dateTitle)
             .navigationBarTitleDisplayMode(.inline)
@@ -180,13 +194,14 @@ struct ManageEntriesView: View {
         let newEntry = ParsedNotepadEntry.from(
             parsedResult: finalResult,
             originalText: newText,
-            date: oldEntry.date // Keep original date!
+            date: oldEntry.date,
+            id: oldEntry.id
         )
         
         do {
-            try await store.deleteEntry(oldEntry)
-            try await store.addEntry(newEntry)
+            try await store.updateEntry(newEntry)
         } catch {
+            processingError = error.localizedDescription
         }
     }
 }

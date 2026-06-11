@@ -37,6 +37,8 @@ final class TestEventKitService: EventKitServicing {
     private(set) var createReminderCallCount = 0
     var nextEventIdentifier = "event-test-id"
     var nextReminderIdentifier = "reminder-test-id"
+    var createEventError: Error?
+    var createReminderError: Error?
 
     func createEventRecord(
         title: String,
@@ -48,6 +50,9 @@ final class TestEventKitService: EventKitServicing {
         calendar: EKCalendar?
     ) async throws -> CreatedCalendarItem<EKEvent> {
         createEventCallCount += 1
+        if let createEventError {
+            throw createEventError
+        }
         let event = EKEvent(eventStore: eventStore)
         event.title = title
         event.startDate = startDate
@@ -68,6 +73,9 @@ final class TestEventKitService: EventKitServicing {
         calendar: EKCalendar?
     ) async throws -> CreatedCalendarItem<EKReminder> {
         createReminderCallCount += 1
+        if let createReminderError {
+            throw createReminderError
+        }
         let reminder = EKReminder(eventStore: eventStore)
         reminder.title = title
         reminder.notes = notes

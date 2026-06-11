@@ -217,26 +217,47 @@ final class WorkSessionStore: NSObject, ObservableObject {
 
             entity.endTime = time
             entity.modifiedAt = Date()
-
-            if let startTime = entity.startTime {
-                let startComponents = startTime.split(separator: ":")
-                let endComponents = time.split(separator: ":")
-                if startComponents.count == 2, endComponents.count == 2,
-                   let startHour = Int(startComponents[0]),
-                   let startMinute = Int(startComponents[1]),
-                   let endHour = Int(endComponents[0]),
-                   let endMinute = Int(endComponents[1]) {
-                    let startTotal = startHour * 60 + startMinute
-                    let endTotal = endHour * 60 + endMinute
-                    var duration = endTotal - startTotal
-                    if duration < 0 {
-                        duration += 24 * 60
-                    }
-                    entity.durationMinutes = Int32(duration > 0 ? duration : 0)
-                }
-            }
+            entity.durationMinutes = Self.durationMinutes(from: entity.startTime, to: time)
 
             return WorkSessionStruct(from: entity)
+        }
+    }
+
+    func replaceActiveSession(
+        existingSessionId: UUID,
+        newDate: Date,
+        newTime: String,
+        newObject: String?
+    ) async throws -> WorkSessionStruct {
+        let deviceId = DeviceIdHelper.getOrCreateDeviceId()
+
+        return try await persistence.performBackgroundTask { context in
+            let existingRequest: NSFetchRequest<WorkSession> = WorkSession.fetchRequest()
+            existingRequest.predicate = NSPredicate(
+                format: "id == %@ AND endTime == nil",
+                existingSessionId as CVarArg
+            )
+            existingRequest.fetchLimit = 1
+
+            guard let existing = try context.fetch(existingRequest).first else {
+                throw WorkSessionError.noActiveSession
+            }
+
+            existing.endTime = newTime
+            existing.modifiedAt = Date()
+            existing.durationMinutes = Self.durationMinutes(from: existing.startTime, to: newTime)
+
+            let replacement = WorkSession(context: context)
+            replacement.id = UUID()
+            replacement.date = newDate
+            replacement.startTime = newTime
+            replacement.endTime = nil
+            replacement.object = newObject
+            replacement.createdAt = newDate
+            replacement.modifiedAt = Date()
+            replacement.deviceId = deviceId
+
+            return WorkSessionStruct(from: replacement)
         }
     }
     
@@ -280,6 +301,29 @@ final class WorkSessionStore: NSObject, ObservableObject {
     func getActiveWorkSession() -> WorkSessionStruct? {
         // Find the most recent active session (endTime == nil)
         return sessions.first(where: { $0.endTime == nil })
+    }
+
+    private static func durationMinutes(from startTime: String?, to endTime: String) -> Int32 {
+        guard let startTime else { return 0 }
+
+        let startComponents = startTime.split(separator: ":")
+        let endComponents = endTime.split(separator: ":")
+        guard startComponents.count == 2,
+              endComponents.count == 2,
+              let startHour = Int(startComponents[0]),
+              let startMinute = Int(startComponents[1]),
+              let endHour = Int(endComponents[0]),
+              let endMinute = Int(endComponents[1]) else {
+            return 0
+        }
+
+        let startTotal = startHour * 60 + startMinute
+        let endTotal = endHour * 60 + endMinute
+        var duration = endTotal - startTotal
+        if duration < 0 {
+            duration += 24 * 60
+        }
+        return Int32(max(duration, 0))
     }
     
 }

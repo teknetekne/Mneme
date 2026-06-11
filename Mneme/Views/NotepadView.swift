@@ -439,8 +439,7 @@ struct NotepadContent: View {
         }
         .alert("Active Work Session", isPresented: $viewModel.showWorkSessionConfirmation) {
             Button("Cancel", role: .cancel) {
-                viewModel.pendingWorkStart = nil
-                viewModel.existingWorkSession = nil
+                viewModel.cancelWorkStartReplacement()
             }
             Button("Replace", role: .destructive) {
                 viewModel.confirmWorkStartReplacement()

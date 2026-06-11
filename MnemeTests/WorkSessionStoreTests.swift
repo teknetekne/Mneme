@@ -63,4 +63,48 @@ final class WorkSessionStoreTests: XCTestCase {
             XCTAssertEqual((error as NSError).localizedDescription, persistence.injectedError.localizedDescription)
         }
     }
+
+    func testReplaceActiveSessionEndsExistingAndStartsReplacementAtomically() async throws {
+        let store = WorkSessionStore(persistence: InMemoryPersistence())
+        _ = try await store.recordWorkStart(date: Date(), time: "09:00", object: "Old")
+        await waitUntil { store.getActiveWorkSession() != nil }
+        let existing = try XCTUnwrap(store.getActiveWorkSession())
+
+        let replacement = try await store.replaceActiveSession(
+            existingSessionId: existing.id,
+            newDate: Date(),
+            newTime: "10:30",
+            newObject: "New"
+        )
+        await waitUntil {
+            store.sessions.count == 2 && store.sessions.filter { $0.endTime == nil }.count == 1
+        }
+
+        XCTAssertEqual(replacement.startTime, "10:30")
+        XCTAssertEqual(replacement.object, "New")
+        XCTAssertEqual(store.sessions.first(where: { $0.id == existing.id })?.endTime, "10:30")
+    }
+
+    func testReplaceActiveSessionFailureLeavesExistingSessionActive() async throws {
+        let persistence = FlakyPersistence()
+        let store = WorkSessionStore(persistence: persistence)
+        _ = try await store.recordWorkStart(date: Date(), time: "09:00", object: "Old")
+        await waitUntil { store.getActiveWorkSession() != nil }
+        let existing = try XCTUnwrap(store.getActiveWorkSession())
+        persistence.shouldFail = true
+
+        do {
+            _ = try await store.replaceActiveSession(
+                existingSessionId: existing.id,
+                newDate: Date(),
+                newTime: "10:30",
+                newObject: "New"
+            )
+            XCTFail("Expected replacement to throw.")
+        } catch {
+            XCTAssertEqual(store.sessions.count, 1)
+            XCTAssertEqual(store.getActiveWorkSession()?.id, existing.id)
+            XCTAssertNil(store.getActiveWorkSession()?.endTime)
+        }
+    }
 }

@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import Combine
+import EventKit
 
 // MARK: - Notepad ViewModel (Refactored)
 
@@ -53,6 +54,8 @@ final class NotepadViewModel: ObservableObject {
     }
 
     private var snackbarDismissTask: Task<Void, Never>?
+    private var pendingWorkStartLineId: UUID?
+    private var pendingWorkStartEntry: ParsedNotepadEntry?
     
     // MARK: - Parsing (from old code)
     
@@ -601,7 +604,25 @@ final class NotepadViewModel: ObservableObject {
     func confirmWorkStartReplacement() {
         Task {
             do {
-                try await workSessionManager.confirmWorkStartReplacement()
+                if let entry = pendingWorkStartEntry {
+                    try await notepadEntryStore.addEntry(entry)
+                    do {
+                        try await workSessionManager.confirmWorkStartReplacement()
+                    } catch {
+                        try? await notepadEntryStore.deleteEntry(entry)
+                        throw error
+                    }
+
+                    if let lineId = pendingWorkStartLineId {
+                        lineParsingResults.removeValue(forKey: lineId)
+                        _ = lineStore.deleteLine(lineId)
+                    }
+                    pendingWorkStartLineId = nil
+                    pendingWorkStartEntry = nil
+                    showSuccess("Work session replaced successfully")
+                } else {
+                    try await workSessionManager.confirmWorkStartReplacement()
+                }
             } catch {
                 showError("Failed to start work session: \(error.localizedDescription)")
             }
@@ -609,6 +630,8 @@ final class NotepadViewModel: ObservableObject {
     }
     
     func cancelWorkStartReplacement() {
+        pendingWorkStartLineId = nil
+        pendingWorkStartEntry = nil
         workSessionManager.cancelWorkStartReplacement()
     }
     
@@ -857,6 +880,7 @@ final class NotepadViewModel: ObservableObject {
         var warningMessages: [String] = []
         var succeededLineIds: [UUID] = []
         var failedLineIds: [UUID] = []
+        var deferredLineIds: [UUID] = []
         
         for line in nonEmptyLines {
             let results = lineParsingResults[line.id] ?? []
@@ -869,20 +893,30 @@ final class NotepadViewModel: ObservableObject {
             
             let intent = NotepadFormatter.normalizeIntentForCheck(intentItem.value)
             let parsedResult = convertToParseResult(from: results, for: line.id)
-            let entry = ParsedNotepadEntry.from(parsedResult: parsedResult, originalText: line.text)
+            let entry = ParsedNotepadEntry.from(
+                parsedResult: parsedResult,
+                originalText: line.text,
+                id: line.id
+            )
 
             // Then handle intent-specific actions
             switch intent {
             case "event":
                 do {
-                    let createdEvent = try await eventKitManager.createEvent(
-                        from: parsedResult,
-                        originalText: line.text,
-                        lineId: line.id,
-                        location: locationManager.getLocation(for: line.id),
-                        url: locationManager.getURL(for: line.id)
-                    )
                     try await notepadEntryStore.addEntry(entry)
+                    let createdEvent: EventKitManager.CalendarItemCreationResult<EKEvent>
+                    do {
+                        createdEvent = try await eventKitManager.createEvent(
+                            from: parsedResult,
+                            originalText: line.text,
+                            lineId: line.id,
+                            location: locationManager.getLocation(for: line.id),
+                            url: locationManager.getURL(for: line.id)
+                        )
+                    } catch {
+                        try? await notepadEntryStore.deleteEntry(entry)
+                        throw error
+                    }
                     if let tagSyncError = createdEvent.tagSyncError {
                         warningMessages.append("Created event for \"\(line.text)\", but tags were not synced: \(tagSyncError.localizedDescription)")
                     }
@@ -897,14 +931,20 @@ final class NotepadViewModel: ObservableObject {
                 
             case "reminder":
                 do {
-                    let createdReminder = try await eventKitManager.createReminder(
-                        from: parsedResult,
-                        originalText: line.text,
-                        lineId: line.id,
-                        location: locationManager.getLocation(for: line.id),
-                        url: locationManager.getURL(for: line.id)
-                    )
                     try await notepadEntryStore.addEntry(entry)
+                    let createdReminder: EventKitManager.CalendarItemCreationResult<EKReminder>
+                    do {
+                        createdReminder = try await eventKitManager.createReminder(
+                            from: parsedResult,
+                            originalText: line.text,
+                            lineId: line.id,
+                            location: locationManager.getLocation(for: line.id),
+                            url: locationManager.getURL(for: line.id)
+                        )
+                    } catch {
+                        try? await notepadEntryStore.deleteEntry(entry)
+                        throw error
+                    }
                     if let tagSyncError = createdReminder.tagSyncError {
                         warningMessages.append("Created reminder for \"\(line.text)\", but tags were not synced: \(tagSyncError.localizedDescription)")
                     }
@@ -919,10 +959,47 @@ final class NotepadViewModel: ObservableObject {
                 
             case "work_start":
                 do {
-                    try await workSessionManager.handleWorkStart(result: parsedResult, originalText: line.text)
-                    try await notepadEntryStore.addEntry(entry)
-                    successCount += 1
-                    succeededLineIds.append(line.id)
+                    if workSessionManager.hasActiveSession {
+                        guard pendingWorkStartLineId == nil else {
+                            deferredLineIds.append(line.id)
+                            continue
+                        }
+
+                        let result = try await workSessionManager.handleWorkStart(
+                            result: parsedResult,
+                            originalText: line.text
+                        )
+                        switch result {
+                        case .needsConfirmation:
+                            pendingWorkStartLineId = line.id
+                            pendingWorkStartEntry = entry
+                            deferredLineIds.append(line.id)
+                        case .started:
+                            try await notepadEntryStore.addEntry(entry)
+                            successCount += 1
+                            succeededLineIds.append(line.id)
+                        }
+                    } else {
+                        try await notepadEntryStore.addEntry(entry)
+                        do {
+                            let result = try await workSessionManager.handleWorkStart(
+                                result: parsedResult,
+                                originalText: line.text
+                            )
+                            guard case .started = result else {
+                                try? await notepadEntryStore.deleteEntry(entry)
+                                pendingWorkStartLineId = line.id
+                                pendingWorkStartEntry = entry
+                                deferredLineIds.append(line.id)
+                                continue
+                            }
+                        } catch {
+                            try? await notepadEntryStore.deleteEntry(entry)
+                            throw error
+                        }
+                        successCount += 1
+                        succeededLineIds.append(line.id)
+                    }
                 } catch {
                     showError("Failed to start work session: \(error.localizedDescription)")
                     lineStore.updateStatus(for: line.id, status: .error)
@@ -932,8 +1009,13 @@ final class NotepadViewModel: ObservableObject {
                 
             case "work_end":
                 do {
-                    try await workSessionManager.handleWorkEnd(result: parsedResult, originalText: line.text)
                     try await notepadEntryStore.addEntry(entry)
+                    do {
+                        try await workSessionManager.handleWorkEnd(result: parsedResult, originalText: line.text)
+                    } catch {
+                        try? await notepadEntryStore.deleteEntry(entry)
+                        throw error
+                    }
                     successCount += 1
                     succeededLineIds.append(line.id)
                 } catch {
@@ -963,21 +1045,26 @@ final class NotepadViewModel: ObservableObject {
         }
         
         // Clear lines after processing
-        if failedLineIds.isEmpty {
+        if failedLineIds.isEmpty && deferredLineIds.isEmpty {
             resetLines()
         } else {
-            // Remove only the successful lines; keep failed ones for retry
+            // Remove only successful lines; failed and deferred lines stay visible.
             for id in succeededLineIds {
                 lineParsingResults.removeValue(forKey: id)
                 _ = lineStore.deleteLine(id)
             }
-            if let firstFailed = failedLineIds.first {
-                lineStore.focusedId = firstFailed
+            if let firstRemaining = failedLineIds.first ?? deferredLineIds.first {
+                lineStore.focusedId = firstRemaining
             }
         }
         
         // Show appropriate message
-        if errorCount == 0, warningMessages.isEmpty {
+        if !deferredLineIds.isEmpty, errorCount == 0 {
+            showWarning(
+                "\(deferredLineIds.count) work session item(s) are awaiting confirmation.",
+                title: "Confirmation Required"
+            )
+        } else if errorCount == 0, warningMessages.isEmpty {
             showSuccess("Processed \(successCount) item(s). All succeeded.", title: "Processing Complete")
         } else if errorCount == 0 {
             showWarning("Processed \(successCount) item(s) with warnings. \(warningMessages[0])", title: "Processing Complete")

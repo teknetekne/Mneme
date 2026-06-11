@@ -53,8 +53,14 @@ struct ParsedNotepadEntry: Identifiable, Equatable {
         self.mealKcal = mealKcal
     }
     
-    static func from(parsedResult: ParsedResult, originalText: String, date: Date = Date()) -> ParsedNotepadEntry {
+    static func from(
+        parsedResult: ParsedResult,
+        originalText: String,
+        date: Date = Date(),
+        id: UUID = UUID()
+    ) -> ParsedNotepadEntry {
         return ParsedNotepadEntry(
+            id: id,
             date: date,
             originalText: originalText,
             intent: parsedResult.intent?.value,
@@ -161,24 +167,27 @@ final class NotepadEntryStore: NSObject, ObservableObject {
     
     func addEntry(_ entry: ParsedNotepadEntry) async throws {
         try await persistence.performBackgroundTask { context in
-            let parsedEntry = ParsedEntry(context: context)
-            parsedEntry.id = entry.id
-            parsedEntry.originalText = entry.originalText
-            parsedEntry.intent = entry.intent
-            parsedEntry.object = entry.object
-            parsedEntry.reminderTime = entry.reminderTime
-            parsedEntry.reminderDay = entry.reminderDay
-            parsedEntry.eventTime = entry.eventTime
-            parsedEntry.eventDay = entry.eventDay
-            parsedEntry.currency = entry.currency
-            parsedEntry.amount = entry.amount ?? 0
-            parsedEntry.duration = entry.duration ?? 0
-            parsedEntry.distance = entry.distance ?? 0
-            parsedEntry.mealQuantity = entry.mealQuantity
-            parsedEntry.mealKcal = entry.mealKcal ?? 0
-            parsedEntry.createdAt = entry.date
-            parsedEntry.modifiedAt = Date()
-            parsedEntry.deviceId = DeviceIdHelper.getOrCreateDeviceId()
+            let fetchRequest: NSFetchRequest<ParsedEntry> = ParsedEntry.fetchRequest()
+            fetchRequest.predicate = NSPredicate(format: "id == %@", entry.id as CVarArg)
+            fetchRequest.fetchLimit = 1
+
+            let parsedEntry = try context.fetch(fetchRequest).first ?? ParsedEntry(context: context)
+            Self.apply(entry, to: parsedEntry, preserveDeviceId: parsedEntry.id != nil)
+            return ()
+        }
+    }
+
+    func updateEntry(_ entry: ParsedNotepadEntry) async throws {
+        try await persistence.performBackgroundTask { context in
+            let fetchRequest: NSFetchRequest<ParsedEntry> = ParsedEntry.fetchRequest()
+            fetchRequest.predicate = NSPredicate(format: "id == %@", entry.id as CVarArg)
+            fetchRequest.fetchLimit = 1
+
+            guard let parsedEntry = try context.fetch(fetchRequest).first else {
+                throw NotepadEntryStoreError.entryNotFound
+            }
+
+            Self.apply(entry, to: parsedEntry, preserveDeviceId: true)
             return ()
         }
     }
@@ -208,7 +217,44 @@ final class NotepadEntryStore: NSObject, ObservableObject {
         
         return String(combined.prefix(maxLength)) + "..."
     }
-    
+
+    private static func apply(
+        _ entry: ParsedNotepadEntry,
+        to parsedEntry: ParsedEntry,
+        preserveDeviceId: Bool
+    ) {
+        parsedEntry.id = entry.id
+        parsedEntry.originalText = entry.originalText
+        parsedEntry.intent = entry.intent
+        parsedEntry.object = entry.object
+        parsedEntry.reminderTime = entry.reminderTime
+        parsedEntry.reminderDay = entry.reminderDay
+        parsedEntry.eventTime = entry.eventTime
+        parsedEntry.eventDay = entry.eventDay
+        parsedEntry.currency = entry.currency
+        parsedEntry.amount = entry.amount ?? 0
+        parsedEntry.duration = entry.duration ?? 0
+        parsedEntry.distance = entry.distance ?? 0
+        parsedEntry.mealQuantity = entry.mealQuantity
+        parsedEntry.mealKcal = entry.mealKcal ?? 0
+        parsedEntry.createdAt = entry.date
+        parsedEntry.modifiedAt = Date()
+
+        if !preserveDeviceId || parsedEntry.deviceId == nil {
+            parsedEntry.deviceId = DeviceIdHelper.getOrCreateDeviceId()
+        }
+    }
+}
+
+enum NotepadEntryStoreError: LocalizedError {
+    case entryNotFound
+
+    var errorDescription: String? {
+        switch self {
+        case .entryNotFound:
+            return "The entry no longer exists."
+        }
+    }
 }
 
 extension NotepadEntryStore: NSFetchedResultsControllerDelegate {

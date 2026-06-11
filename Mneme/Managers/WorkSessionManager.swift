@@ -1,6 +1,11 @@
 import Foundation
 import Combine
 
+enum WorkStartHandlingResult {
+    case started
+    case needsConfirmation
+}
+
 // MARK: - Work Session Manager
 
 /// Manages work session tracking (start/end)
@@ -31,7 +36,7 @@ final class WorkSessionManager: ObservableObject {
     /// - Parameters:
     ///   - result: Parsed NLP result
     ///   - originalText: Original text input
-    func handleWorkStart(result: ParsedResult, originalText: String) async throws {
+    func handleWorkStart(result: ParsedResult, originalText: String) async throws -> WorkStartHandlingResult {
         let now = Date()
         let calendar = Calendar.current
         let hour = calendar.component(.hour, from: now)
@@ -41,15 +46,13 @@ final class WorkSessionManager: ObservableObject {
         
         // Check if there's an existing active session
         if let existing = workSessionStore.getActiveWorkSession() {
-            // Show confirmation dialog
-            await MainActor.run {
-                self.existingWorkSession = existing
-                self.pendingWorkStart = (date: now, time: timeString, object: object)
-                self.showWorkSessionConfirmation = true
-            }
+            existingWorkSession = existing
+            pendingWorkStart = (date: now, time: timeString, object: object)
+            showWorkSessionConfirmation = true
+            return .needsConfirmation
         } else {
-            // No active session - start new one directly
             try await startNewSession(date: now, time: timeString, object: object)
+            return .started
         }
     }
     
@@ -57,24 +60,20 @@ final class WorkSessionManager: ObservableObject {
     func confirmWorkStartReplacement() async throws {
         guard let pending = pendingWorkStart else { return }
         
-        // End existing session
-        if let existing = existingWorkSession {
-            _ = try await workSessionStore.recordWorkEnd(date: existing.date, time: pending.time, object: existing.object)
+        guard let existing = existingWorkSession else {
+            throw WorkSessionError.noActiveSession
         }
-        
-        // Start new session
-        try await startNewSession(
-            date: pending.date,
-            time: pending.time,
-            object: pending.object
+
+        _ = try await workSessionStore.replaceActiveSession(
+            existingSessionId: existing.id,
+            newDate: pending.date,
+            newTime: pending.time,
+            newObject: pending.object
         )
         
-        // Clear state
-        await MainActor.run {
-            self.showWorkSessionConfirmation = false
-            self.pendingWorkStart = nil
-            self.existingWorkSession = nil
-        }
+        showWorkSessionConfirmation = false
+        pendingWorkStart = nil
+        existingWorkSession = nil
     }
     
     /// Cancel work start replacement
