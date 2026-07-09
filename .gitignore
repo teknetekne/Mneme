@@ -131,6 +131,15 @@ Mneme/FatSecretConfig.plist
 /notes/
 .env
 .Rhistory
+/AGENTS.md
+/CLAUDE.md
+/ASO_STRATEGY.md
+/IMPLEMENTATION_ROADMAP.md
+/PHASE*_COMPLETE.md
+/REFACTOR_*.md
+/Reproduction.swift
+/test_output.txt
+/tinyBERT/
 
 # Web project dependencies
 mneme-web/node_modules/
